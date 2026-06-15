@@ -68,6 +68,12 @@ final class GameScene: SKScene {
     // Progression / map
     private var maxUnlocked = 0
 
+    // Hub
+    private var inHub = false
+    private var shopDoor: CGPoint?
+    private var arcadeDoor: CGPoint?
+    private var missionsPortal: SKNode?
+
     // Camera shake
     private var shakeTime: TimeInterval = 0
     private var shakeMag: CGFloat = 0
@@ -117,6 +123,11 @@ final class GameScene: SKScene {
 
         if ProcessInfo.processInfo.environment["KAIDITYA_SHOP"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.showShop() }
+        }
+        if ProcessInfo.processInfo.environment["KAIDITYA_HUB"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
+            }
         }
         DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
@@ -251,6 +262,8 @@ final class GameScene: SKScene {
     private func loadLevel(_ idx: Int) {
         levelIndex = idx
         level = Levels.all[idx]
+        inHub = false
+        cam.childNode(withName: "dayNight")?.removeFromParent()
 
         // Teardown previous world cleanly (prevents lingering actions/closures).
         removeAction(forKey: "bossLoop")
@@ -1031,7 +1044,15 @@ final class GameScene: SKScene {
         let shopLbl = SKLabelNode(text: "🛒  SHOP  ·  \(Economy.coins)★")
         shopLbl.fontName = "AvenirNext-Heavy"; shopLbl.fontSize = 16; shopLbl.fontColor = .white
         shopLbl.verticalAlignmentMode = .center; shop.addChild(shopLbl)
+        shop.position = CGPoint(x: -98, y: -size.height/2 + safeBottom + 30)
         overlay.addChild(shop)
+
+        let home = roundedRect(size: CGSize(width: 150, height: 44), corner: 14, color: Palette.heroBlue)
+        home.strokeColor = .white; home.lineWidth = 2; home.name = "homeButton"
+        home.position = CGPoint(x: 96, y: -size.height/2 + safeBottom + 30)
+        let homeLbl = SKLabelNode(text: "🏠  CITY"); homeLbl.fontName = "AvenirNext-Heavy"; homeLbl.fontSize = 16
+        homeLbl.fontColor = .white; homeLbl.verticalAlignmentMode = .center; home.addChild(homeLbl)
+        overlay.addChild(home)
 
         cam.addChild(overlay)
         positionOverlay(overlay)
@@ -1096,6 +1117,9 @@ final class GameScene: SKScene {
     private func handleMapTap(_ camP: CGPoint) {
         if let shop = cam.childNode(withName: "//shopButton"), shop.contains(cam.convert(camP, to: shop.parent!)) {
             cam.childNode(withName: "mapOverlay")?.removeFromParent(); showShop(); return
+        }
+        if let home = cam.childNode(withName: "//homeButton"), home.contains(cam.convert(camP, to: home.parent!)) {
+            cam.childNode(withName: "mapOverlay")?.removeFromParent(); enterHub(); return
         }
         for i in 0..<Levels.all.count where i <= maxUnlocked {
             if let node = cam.childNode(withName: "//mapnode_\(i)"),
@@ -1488,8 +1512,93 @@ final class GameScene: SKScene {
             let start = Int(ProcessInfo.processInfo.environment["KAIDITYA_START_LEVEL"] ?? "") ?? 0
             loadLevel(min(max(start, 0), Levels.all.count - 1))
         } else {
-            showMap()
+            enterHub()
         }
+    }
+
+    // MARK: - Hub town
+
+    private func enterHub() {
+        inHub = true
+        level = Levels.hub
+        levelIndex = -1
+        removeAction(forKey: "bossLoop"); removeAllActions()
+        worldNode.removeAllActions(); worldNode.removeFromParent()
+        worldNode = SKNode(); addChild(worldNode)
+        npcs = []; minions = []; crystalNodes = []; coverRects = []
+        exitPortal = nil; powerCore = nil; villain = nil
+        grappleAnchorNodes = []; grappleTarget = nil; grappling = false
+        shopDoor = nil; arcadeDoor = nil; missionsPortal = nil
+        objective = .done
+        player.removeFromParent(); player.resetForLevel()
+        player.position = level.heroSpawn
+        worldNode.addChild(player)
+        disguiseBtn.setTitle("HIDE")
+
+        backgroundColor = biome.groundB
+        buildHubWorld()
+        setupAtmosphere()
+        startDayNight()
+        cam.position = clampedCamera(player.position)
+        hud.updateObjective(level: "HERO CITY", title: "Welcome home, hero!",
+                            hint: "Enter a glowing portal for missions · visit the SHOP & ARCADE", progress: "")
+        hud.updateCrystals(0); hud.updateCoins(Economy.coins); hud.updateEnergy(1); hud.hideBossBar()
+        setControlsHidden(false); applyControlMode()
+        refreshQuestMarkers()
+        state = .playing
+        SoundFX.shared.playMusic("explore")
+        hud.showToast("Welcome to Hero City! 🦸", color: biome.accent)
+    }
+
+    private func buildHubWorld() {
+        buildGround()
+        for s in level.signs { addSign(text: s.text, at: s.pos) }
+        for t in level.treeSpots { addTree(at: t) }
+        // Buildings with glowing doors.
+        addHubBuilding(label: "HQ", at: CGPoint(x: 950, y: 1280), roof: Palette.heroBlue, door: nil)
+        let shop = CGPoint(x: 520, y: 1050)
+        addHubBuilding(label: "SHOP", at: CGPoint(x: 520, y: 1180), roof: Palette.energy.darker, door: shop)
+        shopDoor = shop
+        let arcade = CGPoint(x: 1380, y: 1050)
+        addHubBuilding(label: "ARCADE", at: CGPoint(x: 1380, y: 1180), roof: Palette.heroRed, door: arcade)
+        arcadeDoor = arcade
+        for n in level.npcs { addNPCSpec(n) }
+        // Missions portal.
+        let portal = Effects.portal(accent: biome.accent, label: "MISSIONS")
+        portal.position = level.exitPos; portal.zPosition = ZLayer.items
+        portal.alpha = 1
+        worldNode.addChild(portal); missionsPortal = portal
+        let border = SKShapeNode(rect: CGRect(origin: .zero, size: worldSize))
+        border.strokeColor = biome.borderColor; border.lineWidth = 10; border.zPosition = ZLayer.decals
+        worldNode.addChild(border)
+    }
+
+    private func addHubBuilding(label: String, at p: CGPoint, roof: SKColor, door: CGPoint?) {
+        addBuilding(BuildingSpec(pos: p, size: CGSize(width: 180, height: 140), roof: roof, label: label))
+        if let d = door {
+            let glow = SKShapeNode(circleOfRadius: 26)
+            glow.fillColor = roof.withAlphaComponent(0.35); glow.strokeColor = .white; glow.lineWidth = 2; glow.glowWidth = 4
+            glow.position = d; glow.zPosition = ZLayer.items
+            glow.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.6), .scale(to: 1.0, duration: 0.6)])))
+            let tag = SKLabelNode(text: label); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 12
+            tag.fontColor = .white; tag.verticalAlignmentMode = .center; tag.position = CGPoint(x: 0, y: -40)
+            glow.addChild(tag)
+            worldNode.addChild(glow)
+        }
+    }
+
+    /// Gentle day↔night tint cycle in the hub.
+    private func startDayNight() {
+        let overlay = SKSpriteNode(color: SKColor(red: 0.1, green: 0.1, blue: 0.35, alpha: 1),
+                                   size: CGSize(width: 4000, height: 4000))
+        overlay.zPosition = ZLayer.fx + 1; overlay.alpha = 0; overlay.name = "dayNight"
+        cam.addChild(overlay)
+        overlay.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.0, duration: 14),   // day
+            .fadeAlpha(to: 0.45, duration: 8),   // dusk → night
+            .fadeAlpha(to: 0.45, duration: 6),
+            .fadeAlpha(to: 0.0, duration: 8)     // dawn
+        ])))
     }
 
     private func toggleDisguise() {
@@ -1505,6 +1614,15 @@ final class GameScene: SKScene {
         let dt = min(currentTime - lastUpdate, 1.0/30.0)
         lastUpdate = currentTime
         if demoMode { runDemo(dt: dt) }
+
+        // Free-roam hub: move + contextual interactions, no stealth/objective.
+        if inHub {
+            if state == .playing { movePlayer(dt: dt); updateHubInteract() }
+            player.update(dt: dt)
+            cam.position = cameraWithShake(clampedCamera(player.position), dt: dt)
+            hud.updateEnergy(player.energyPct)
+            return
+        }
 
         // Driving levels use a dedicated update path.
         if level.isDriving {
@@ -1775,11 +1893,62 @@ final class GameScene: SKScene {
         interactBtn.setEnabled(enabled)
     }
 
+    private func updateHubInteract() {
+        let pp = player.position
+        // Walk into the missions portal → zone map.
+        if let portal = missionsPortal, portal.position.distance(to: pp) < 50 {
+            inHub = false
+            cam.childNode(withName: "dayNight")?.removeFromParent()
+            SoundFX.shared.play("powerup")
+            showMap()
+            return
+        }
+        nearestInteract = nil
+        var label = "TALK"; var enabled = false
+        if let s = shopDoor, s.distance(to: pp) < 72 {
+            enabled = true; label = "SHOP"; nearestInteract = { [weak self] in self?.openShopFromHub() }
+        } else if let a = arcadeDoor, a.distance(to: pp) < 72 {
+            enabled = true; label = "ARCADE"; nearestInteract = { [weak self] in self?.openArcade() }
+        } else if let npc = nearestNPC(), npc.position.distance(to: pp) < 72 {
+            enabled = true; label = "TALK"; nearestInteract = { [weak self] in self?.talkTo(npc) }
+        }
+        interactBtn.setTitle(label)
+        interactBtn.setEnabled(enabled)
+    }
+
+    private func openShopFromHub() {
+        cam.childNode(withName: "dayNight")?.removeFromParent()
+        inHub = false
+        showShop()
+    }
+
+    private func openArcade() {
+        hud.showToast("Arcade: Crystal Catch — coming soon!", color: Palette.heroRed)
+    }
+
     private func nearestNPC() -> NPC? {
         npcs.min(by: { $0.position.distance(to: player.position) < $1.position.distance(to: player.position) })
     }
 
     private func talkTo(_ npc: NPC) {
+        if inHub {
+            switch npc.id {
+            case "mayor":
+                showDialogue(speaker: "Mayor Mia", lines: [
+                    "Welcome to Hero City, Kaiditya!",
+                    "Step into the glowing MISSIONS portal to choose a zone to save.",
+                    "Spend the coins you collect at the SHOP for new gadgets!"
+                ])
+            case "gran":
+                showDialogue(speaker: "Granny Gold", lines: [
+                    "Hello dearie! Those coins you find aren't just for show.",
+                    "Buy Swift Boots or a Mega Shield at the SHOP — they really help!"
+                ])
+            default:
+                showDialogue(speaker: npc.displayName, lines: ["Stay super, Kaiditya!"])
+            }
+            return
+        }
         switch npc.id {
         case "mayor":
             showDialogue(speaker: "Mayor Mia", lines: [

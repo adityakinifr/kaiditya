@@ -73,6 +73,7 @@ struct LevelData {
     var bossPhases: Int = 1                // multi-phase boss
     var isBoat: Bool = false               // boat chase variant
     var grappleAnchors: [CGPoint] = []     // zip-to grapple points
+    var isHub: Bool = false                // free-roam home town
 }
 
 enum Biomes {
@@ -232,6 +233,35 @@ enum Biomes {
 
 enum Levels {
     static let all: [LevelData] = [level1, chase, level2, rooftops, lab, sewers, gauntlet, harbor, powerplant, level3, fortress]
+
+    /// Free-roam home town (not part of the playable progression).
+    static let hub = LevelData(
+        index: 0,
+        name: "Hero City",
+        subtitle: "Your home base.",
+        biome: Biomes.park,
+        worldSize: CGSize(width: 1900, height: 1500),
+        heroSpawn: CGPoint(x: 950, y: 880),
+        corePos: nil,
+        exitPos: CGPoint(x: 950, y: 1150),
+        crystalsRequired: 0,
+        crystalSpots: [],
+        minionPatrols: [],
+        minionSpeed: 0, minionRange: 0,
+        coverSpots: [],
+        treeSpots: [CGPoint(x: 300, y: 500), CGPoint(x: 1600, y: 500), CGPoint(x: 250, y: 1100),
+                    CGPoint(x: 1650, y: 1150), CGPoint(x: 700, y: 300), CGPoint(x: 1200, y: 320)],
+        buildings: [],
+        signs: [("WELCOME TO HERO CITY", CGPoint(x: 950, y: 380))],
+        npcs: [
+            NPCSpec(id: "mayor", name: "Mayor Mia", pos: CGPoint(x: 700, y: 700), tint: Palette.heroRed),
+            NPCSpec(id: "gran", name: "Granny Gold", pos: CGPoint(x: 1250, y: 760),
+                    tint: SKColor(red: 0.8, green: 0.6, blue: 0.85, alpha: 1))
+        ],
+        hasBoss: false,
+        objective: "",
+        exitLabel: "MISSIONS",
+        isHub: true)
 
     static let level1 = LevelData(
         index: 1,
