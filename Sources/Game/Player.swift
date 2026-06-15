@@ -1,0 +1,206 @@
+import SpriteKit
+
+/// Kaiditya. Holds the visual node + hero stats (energy, shield, costume state).
+final class Player: SKNode {
+    let visual: SKNode
+    private let shieldBubble: SKShapeNode
+    private let heroShadow: SKShapeNode
+    private(set) var carNode: SKNode?
+    private(set) var isDriving = false
+
+    var maxEnergy: CGFloat = 100
+    var energy: CGFloat = 100
+    let walkSpeed: CGFloat = 200
+    let dashSpeed: CGFloat = 560
+
+    private(set) var isShielded = false
+    private(set) var isDashing = false
+    private var dashTimer: TimeInterval = 0
+    private var shieldTimer: TimeInterval = 0
+
+    /// In costume the minions can recognize you; "secret identity" lets you blend in.
+    private(set) var inCostume = true
+    private var lastFacing = CGVector(dx: 0, dy: -1)
+
+    override init() {
+        visual = CharacterFactory.makeHero()
+        shieldBubble = SKShapeNode(circleOfRadius: 34)
+        heroShadow = Effects.groundShadow(width: 34, height: 12)
+        super.init()
+
+        // Ground shadow stays put while the hero bobs.
+        heroShadow.position = CGPoint(x: 0, y: -16)
+        addChild(heroShadow)
+
+        visual.zPosition = ZLayer.characters
+        addChild(visual)
+
+        shieldBubble.fillColor = SKColor(red: 0.3, green: 0.7, blue: 1, alpha: 0.18)
+        shieldBubble.strokeColor = SKColor(red: 0.4, green: 0.85, blue: 1, alpha: 0.7)
+        shieldBubble.lineWidth = 2.5
+        shieldBubble.glowWidth = 4
+        shieldBubble.zPosition = ZLayer.fx
+        shieldBubble.isHidden = true
+        shieldBubble.position = CGPoint(x: 0, y: 14)
+        addChild(shieldBubble)
+
+        zPosition = ZLayer.characters
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    var energyPct: CGFloat { energy / maxEnergy }
+
+    func setCostume(_ on: Bool) {
+        inCostume = on
+        // Hero-only parts: cape, mask, chest emblem.
+        for name in ["cape", "mask", "emblem"] {
+            visual.enumerateChildNodes(withName: name) { node, _ in node.isHidden = !on }
+        }
+        // The suit recolors to plain civilian clothes while undercover.
+        if let suit = visual.childNode(withName: "suit") as? SKShapeNode {
+            suit.fillColor = on ? Palette.heroBlue : SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)
+            suit.strokeColor = (on ? Palette.heroBlue : SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)).darker
+        }
+        // A little puff when switching.
+        let puff = SKShapeNode(circleOfRadius: 26)
+        puff.fillColor = SKColor(white: 1, alpha: 0.5)
+        puff.strokeColor = .clear
+        puff.zPosition = ZLayer.fx
+        puff.position = CGPoint(x: 0, y: 12)
+        addChild(puff)
+        puff.run(.sequence([.group([.scale(to: 1.6, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+    }
+
+    /// Try to start a dash. Returns false if not enough energy.
+    @discardableResult
+    func tryDash() -> Bool {
+        guard energy >= 25, !isDashing else { return false }
+        energy -= 25
+        isDashing = true
+        dashTimer = 0.28
+        let trail = SKShapeNode(circleOfRadius: 20)
+        trail.fillColor = SKColor(red: 1, green: 0.82, blue: 0.25, alpha: 0.4)
+        trail.strokeColor = .clear
+        trail.zPosition = ZLayer.fx - 1
+        addChild(trail)
+        trail.run(.sequence([.fadeOut(withDuration: 0.3), .removeFromParent()]))
+        return true
+    }
+
+    @discardableResult
+    func tryShield() -> Bool {
+        guard energy >= 35, !isShielded else { return false }
+        energy -= 35
+        isShielded = true
+        shieldTimer = 4.0
+        shieldBubble.isHidden = false
+        shieldBubble.setScale(0.3)
+        shieldBubble.run(.scale(to: 1.0, duration: 0.2))
+        return true
+    }
+
+    func currentSpeed() -> CGFloat { isDashing ? dashSpeed : walkSpeed }
+
+    func faceMovement(_ v: CGVector) {
+        guard v.dx != 0 || v.dy != 0 else { return }
+        lastFacing = v
+        // Flip the hero to face left/right of travel.
+        if abs(v.dx) > 0.05 {
+            visual.xScale = v.dx < 0 ? -1 : 1
+        }
+        // Little bob while walking.
+        if action(forKey: "bob") == nil {
+            visual.run(.repeatForever(.sequence([
+                .moveBy(x: 0, y: 2.5, duration: 0.16),
+                .moveBy(x: 0, y: -2.5, duration: 0.16)
+            ])), withKey: "bob")
+        }
+    }
+
+    func stopWalk() {
+        removeAction(forKey: "bob")
+        visual.removeAction(forKey: "bob")
+    }
+
+    func update(dt: TimeInterval) {
+        if isDashing {
+            dashTimer -= dt
+            if dashTimer <= 0 { isDashing = false }
+        }
+        if isShielded {
+            shieldTimer -= dt
+            shieldBubble.zRotation += CGFloat(dt) * 2
+            if shieldTimer <= 0 {
+                isShielded = false
+                shieldBubble.run(.sequence([.fadeOut(withDuration: 0.2), .run { [weak self] in
+                    self?.shieldBubble.isHidden = true
+                    self?.shieldBubble.alpha = 1
+                }]))
+            }
+        }
+        // Regenerate energy over time.
+        if energy < maxEnergy {
+            energy = min(maxEnergy, energy + CGFloat(dt) * 12)
+        }
+    }
+
+    func addEnergy(_ n: CGFloat) { energy = min(maxEnergy, energy + n) }
+
+    private var starGlow: SKShapeNode?
+    func setStar(_ on: Bool) {
+        if on {
+            if starGlow == nil {
+                let g = SKShapeNode(circleOfRadius: 30)
+                g.fillColor = SKColor(red: 1, green: 0.85, blue: 0.25, alpha: 0.25)
+                g.strokeColor = Palette.energy; g.lineWidth = 2.5; g.glowWidth = 6
+                g.position = CGPoint(x: 0, y: 14); g.zPosition = ZLayer.fx - 1
+                starGlow = g; addChild(g)
+            }
+            starGlow?.isHidden = false
+            starGlow?.run(.repeatForever(.sequence([.scale(to: 1.15, duration: 0.3), .scale(to: 1.0, duration: 0.3)])), withKey: "starPulse")
+        } else {
+            starGlow?.removeAction(forKey: "starPulse")
+            starGlow?.isHidden = true
+        }
+    }
+
+    /// Switch between on-foot hero and driving a car (or boat).
+    func setDriving(_ on: Bool, boat: Bool = false) {
+        isDriving = on
+        if on {
+            carNode?.removeFromParent(); carNode = nil
+            let c = boat ? CharacterFactory.makeBoat(body: Palette.heroBlue, hero: true)
+                         : CharacterFactory.makeCar(body: Palette.heroBlue, hero: true)
+            c.zPosition = ZLayer.characters
+            carNode = c
+            addChild(c)
+            carNode?.isHidden = false
+            carNode?.zRotation = 0
+            visual.isHidden = true
+            heroShadow.isHidden = true
+            shieldBubble.isHidden = true
+        } else {
+            carNode?.isHidden = true
+            visual.isHidden = false
+            heroShadow.isHidden = false
+        }
+    }
+
+    /// Reset hero state at the start of a level.
+    func resetForLevel() {
+        energy = maxEnergy
+        isShielded = false
+        isDashing = false
+        shieldBubble.isHidden = true
+        shieldBubble.alpha = 1
+        removeAllActions()
+        visual.removeAllActions()
+        visual.position = .zero
+        visual.xScale = 1
+        zRotation = 0
+        setDriving(false)
+        setStar(false)
+        setCostume(true)
+    }
+}
