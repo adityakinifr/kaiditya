@@ -5,6 +5,7 @@ import SpriteKit
 final class Minion: SKNode {
     private let body: SKNode
     private let cone: SKShapeNode
+    private let innerCone = SKShapeNode()
     private let alertMark = SKLabelNode(text: "?")
 
     private let waypoints: [CGPoint]
@@ -32,10 +33,15 @@ final class Minion: SKNode {
         super.init()
 
         cone.zPosition = ZLayer.visionCone
-        cone.fillColor = SKColor(red: 1, green: 0.85, blue: 0.2, alpha: 0.18)
+        cone.fillColor = SKColor(red: 1, green: 0.85, blue: 0.2, alpha: 0.16)
         cone.strokeColor = SKColor(red: 1, green: 0.85, blue: 0.2, alpha: 0.35)
         cone.lineWidth = 1
         addChild(cone)
+
+        innerCone.zPosition = 0.1
+        innerCone.fillColor = SKColor(red: 1, green: 0.92, blue: 0.4, alpha: 0.22)
+        innerCone.strokeColor = .clear
+        cone.addChild(innerCone)   // hides/shows with the outer cone
 
         body.zPosition = ZLayer.characters
         addChild(body)
@@ -56,18 +62,24 @@ final class Minion: SKNode {
     required init?(coder: NSCoder) { fatalError() }
 
     private func redrawCone() {
+        cone.path = conePath(length: visionRange)
+        innerCone.path = conePath(length: visionRange * 0.6, halfAngleScale: 0.72)
+    }
+
+    private func conePath(length: CGFloat, halfAngleScale: CGFloat = 1) -> CGPath {
         let p = CGMutablePath()
         p.move(to: .zero)
         let baseAngle = atan2(facing.dy, facing.dx)
-        let steps = 10
-        let start = baseAngle - visionHalfAngle
-        let end = baseAngle + visionHalfAngle
+        let steps = 12
+        let ha = visionHalfAngle * halfAngleScale
+        let start = baseAngle - ha
+        let end = baseAngle + ha
         for i in 0...steps {
             let a = start + (end - start) * CGFloat(i) / CGFloat(steps)
-            p.addLine(to: CGPoint(x: cos(a) * visionRange, y: sin(a) * visionRange))
+            p.addLine(to: CGPoint(x: cos(a) * length, y: sin(a) * length))
         }
         p.closeSubpath()
-        cone.path = p
+        return p
     }
 
     /// Returns true if `point` (in this node's parent space) is within the vision cone.
@@ -104,10 +116,12 @@ final class Minion: SKNode {
     func setSeeing(_ seeing: Bool, dt: TimeInterval) {
         if seeing {
             alertLevel = min(1, alertLevel + CGFloat(dt) * 1.4)
-            cone.fillColor = SKColor(red: 1, green: 0.3, blue: 0.2, alpha: 0.22)
+            cone.fillColor = SKColor(red: 1, green: 0.3, blue: 0.2, alpha: 0.20)
+            innerCone.fillColor = SKColor(red: 1, green: 0.4, blue: 0.25, alpha: 0.30)
         } else {
             alertLevel = max(0, alertLevel - CGFloat(dt) * 0.8)
-            cone.fillColor = SKColor(red: 1, green: 0.85, blue: 0.2, alpha: 0.18)
+            cone.fillColor = SKColor(red: 1, green: 0.85, blue: 0.2, alpha: 0.16)
+            innerCone.fillColor = SKColor(red: 1, green: 0.92, blue: 0.4, alpha: 0.22)
         }
         alertMark.text = alertLevel >= 1 ? "!" : "?"
         alertMark.fontColor = alertLevel >= 1 ? Palette.heroRed : Palette.energy

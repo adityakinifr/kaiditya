@@ -131,46 +131,83 @@ enum CharacterFactory {
         return node
     }
 
-    /// The big bad: Lord Chow-Chow.
+    /// The big bad: Lord Chow-Chow — a fluffy-but-fearsome super-villain dog.
     static func makeVillain() -> SKNode {
         let node = SKNode()
-        let shadow = Effects.groundShadow(width: 46, height: 16)
-        shadow.position = CGPoint(x: 0, y: -22)
+        let fur = SKColor(red: 0.40, green: 0.26, blue: 0.50, alpha: 1)
+        let furDark = fur.darker
+        let shadow = Effects.groundShadow(width: 58, height: 18)
+        shadow.position = CGPoint(x: 0, y: -26)
         node.addChild(shadow)
-        let cape = SKShapeNode(path: capePath(scale: 1.4))
-        cape.fillColor = Palette.villain.darker
-        cape.strokeColor = .clear
-        cape.position = CGPoint(x: 0, y: -3)
-        cape.zPosition = -1
+
+        let cape = SKShapeNode(path: capePath(scale: 1.6))
+        cape.fillColor = Palette.villain.darker; cape.strokeColor = .clear
+        cape.position = CGPoint(x: 0, y: -4); cape.zPosition = -1
         node.addChild(cape)
 
-        let body = roundedRect(size: CGSize(width: 34, height: 40), corner: 10,
+        let body = roundedRect(size: CGSize(width: 40, height: 46), corner: 12,
                                color: Palette.villain, stroke: Palette.villain.darker, lineWidth: 2)
         node.addChild(body)
+        // Lightning bolt emblem on chest
+        let bolt = SKShapeNode(path: boltPath()); bolt.setScale(1.3)
+        bolt.fillColor = Palette.energy; bolt.strokeColor = .clear
+        bolt.position = CGPoint(x: 0, y: 2); node.addChild(bolt)
 
-        let head = SKShapeNode(circleOfRadius: 14)
-        head.fillColor = Palette.villain.lighter
-        head.strokeColor = Palette.villain.darker
-        head.lineWidth = 2
-        head.position = CGPoint(x: 0, y: 30)
-        node.addChild(head)
+        // Fluffy Chow-Chow mane (spiky ruff behind the head)
+        let mane = SKShapeNode(path: starBurstPath(points: 12, outer: 26, inner: 19))
+        mane.fillColor = fur; mane.strokeColor = furDark; mane.lineWidth = 1.5
+        mane.position = CGPoint(x: 0, y: 34); node.addChild(mane)
+        mane.run(.repeatForever(.sequence([.rotate(byAngle: 0.06, duration: 0.8), .rotate(byAngle: -0.06, duration: 0.8)])))
 
-        // Lightning bolt emblem
-        let bolt = SKShapeNode(path: boltPath())
-        bolt.fillColor = Palette.energy
-        bolt.strokeColor = .clear
-        bolt.position = CGPoint(x: 0, y: 4)
-        node.addChild(bolt)
+        // Ears (triangles)
+        for sx in [-1.0, 1.0] {
+            let ear = SKShapeNode(path: {
+                let p = CGMutablePath()
+                p.move(to: CGPoint(x: CGFloat(sx) * 12, y: 48))
+                p.addLine(to: CGPoint(x: CGFloat(sx) * 22, y: 56))
+                p.addLine(to: CGPoint(x: CGFloat(sx) * 20, y: 42))
+                p.closeSubpath(); return p
+            }())
+            ear.fillColor = fur; ear.strokeColor = furDark; ear.lineWidth = 1.5
+            node.addChild(ear)
+        }
 
-        for dx in [-6.0, 6.0] {
-            let eye = SKShapeNode(circleOfRadius: 2.4)
-            eye.fillColor = Palette.heroRed
-            eye.strokeColor = .clear
-            eye.position = CGPoint(x: dx, y: 31)
+        // Face
+        let head = SKShapeNode(circleOfRadius: 16)
+        head.fillColor = fur.lighter; head.strokeColor = furDark; head.lineWidth = 2
+        head.position = CGPoint(x: 0, y: 34); node.addChild(head)
+        // Snout
+        let snout = SKShapeNode(ellipseOf: CGSize(width: 16, height: 12))
+        snout.fillColor = fur.lighter.lighter; snout.strokeColor = furDark; snout.lineWidth = 1
+        snout.position = CGPoint(x: 0, y: 28); node.addChild(snout)
+        let nose = SKShapeNode(circleOfRadius: 3)
+        nose.fillColor = Palette.ink; nose.strokeColor = .clear
+        nose.position = CGPoint(x: 0, y: 30); node.addChild(nose)
+        // Angry glowing eyes (angled)
+        for sx in [-1.0, 1.0] {
+            let eye = SKShapeNode(ellipseOf: CGSize(width: 6, height: 7))
+            eye.fillColor = Palette.heroRed; eye.strokeColor = .white; eye.lineWidth = 0.8
+            eye.glowWidth = 3
+            eye.position = CGPoint(x: CGFloat(sx) * 7, y: 38)
+            eye.zRotation = CGFloat(sx) * 0.4
             node.addChild(eye)
         }
         node.name = "villain"
         return node
+    }
+
+    /// Spiky star/burst path (for manes, bursts).
+    private static func starBurstPath(points: Int, outer: CGFloat, inner: CGFloat) -> CGPath {
+        let p = CGMutablePath()
+        let total = points * 2
+        for i in 0...total {
+            let r = i % 2 == 0 ? outer : inner
+            let a = CGFloat(i) / CGFloat(total) * .pi * 2
+            let pt = CGPoint(x: cos(a) * r, y: sin(a) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
     }
 
     /// Cover object you can hide inside/behind. Returns the node AND its
@@ -391,6 +428,22 @@ enum CharacterFactory {
         c.lineWidth = 2
         c.glowWidth = 3
         c.name = "crystal"
+        // facet lines for a gem look
+        let facets = SKShapeNode(path: {
+            let p = CGMutablePath()
+            p.move(to: CGPoint(x: 0, y: 13)); p.addLine(to: CGPoint(x: 0, y: -13))
+            p.move(to: CGPoint(x: -9, y: 0)); p.addLine(to: CGPoint(x: 9, y: 0))
+            p.move(to: CGPoint(x: -4.5, y: 6.5)); p.addLine(to: CGPoint(x: 4.5, y: 6.5))
+            return p
+        }())
+        facets.strokeColor = Palette.crystal.lighter.withAlphaComponent(0.7); facets.lineWidth = 1
+        c.addChild(facets)
+        // shine highlight
+        let shine = SKShapeNode(path: {
+            let p = CGMutablePath(); p.move(to: CGPoint(x: -3, y: 7)); p.addLine(to: CGPoint(x: -6, y: 0)); p.addLine(to: CGPoint(x: -3, y: -2))
+            return p
+        }())
+        shine.strokeColor = .white; shine.lineWidth = 1.5; shine.alpha = 0.8; c.addChild(shine)
         return c
     }
 

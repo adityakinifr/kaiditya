@@ -1532,15 +1532,105 @@ final class GameScene: SKScene {
         v.run(.sequence([.scale(to: 1.18, duration: 0.15), .scale(to: 1.0, duration: 0.15)]))
         switch bossPhase {
         case 1:
-            boltVolley(from: v, count: 3, spread: 0.25)
+            if bossAttackCounter % 2 == 0 { boltVolley(from: v, count: 3, spread: 0.25) }
+            else { groundStrikes(count: 3) }
         case 2:
-            if bossAttackCounter % 2 == 0 { ringBlast(from: v) }
-            else { boltVolley(from: v, count: 5, spread: 0.4) }
+            switch bossAttackCounter % 4 {
+            case 0: ringBlast(from: v)
+            case 1: boltVolley(from: v, count: 5, spread: 0.4)
+            case 2: spiralBolts(from: v, arms: 2)
+            default: groundStrikes(count: 4)
+            }
         default:
-            if bossAttackCounter % 3 == 0 { chargeAttack(v) }
-            else if bossAttackCounter % 3 == 1 { ringBlast(from: v) }
-            else { boltVolley(from: v, count: 7, spread: 0.6) }
+            switch bossAttackCounter % 5 {
+            case 0: chargeAttack(v)
+            case 1: ringBlast(from: v)
+            case 2: spiralBolts(from: v, arms: 3)
+            case 3: dropMines(count: 5)
+            default: groundStrikes(count: 5)
+            }
         }
+    }
+
+    /// Rotating spiral spray of bolts (bullet-hell flavor).
+    private func spiralBolts(from v: SKNode, arms: Int) {
+        let shots = 9
+        for k in 0..<shots {
+            let baseDelay = Double(k) * 0.12
+            run(.sequence([.wait(forDuration: baseDelay), .run { [weak self] in
+                guard let self, self.objective == .boss, v.parent != nil else { return }
+                for arm in 0..<arms {
+                    let a = CGFloat(k) * 0.5 + CGFloat(arm) * (.pi * 2 / CGFloat(arms))
+                    self.spawnBolt(from: v.position, angle: a)
+                }
+            }]))
+        }
+    }
+
+    private func spawnBolt(from origin: CGPoint, angle a: CGFloat) {
+        let bolt = SKShapeNode(circleOfRadius: 7)
+        bolt.fillColor = Palette.energy; bolt.strokeColor = .white; bolt.lineWidth = 1; bolt.glowWidth = 4
+        bolt.position = origin; bolt.zPosition = ZLayer.fx
+        worldNode.addChild(bolt); bossProjectiles.append(bolt)
+        let dest = CGPoint(x: origin.x + cos(a) * 900, y: origin.y + sin(a) * 900)
+        bolt.run(.sequence([.move(to: dest, duration: 2.0), .removeFromParent()]))
+    }
+
+    /// Telegraphed ground strikes: warning rings that detonate where you stand.
+    private func groundStrikes(count: Int) {
+        for i in 0..<count {
+            let jitter = CGFloat((i * 53) % 200 - 100)
+            let target = CGPoint(x: max(60, min(worldSize.width - 60, player.position.x + jitter)),
+                                 y: max(60, min(worldSize.height - 60, player.position.y + CGFloat((i*89)%200 - 100))))
+            let warn = SKShapeNode(circleOfRadius: 56)
+            warn.strokeColor = Palette.heroRed; warn.lineWidth = 3; warn.fillColor = Palette.heroRed.withAlphaComponent(0.12)
+            warn.position = target; warn.zPosition = ZLayer.decals + 0.5
+            worldNode.addChild(warn)
+            warn.run(.sequence([
+                .repeat(.sequence([.fadeAlpha(to: 0.4, duration: 0.2), .fadeAlpha(to: 1, duration: 0.2)]), count: 2),
+                .run { [weak self] in
+                    guard let self else { return }
+                    let blast = SKShapeNode(circleOfRadius: 56)
+                    blast.fillColor = Palette.heroRed.withAlphaComponent(0.5); blast.strokeColor = Palette.energy; blast.lineWidth = 3
+                    blast.position = target; blast.zPosition = ZLayer.fx
+                    self.worldNode.addChild(blast)
+                    blast.run(.sequence([.group([.scale(to: 1.25, duration: 0.18), .fadeOut(withDuration: 0.3)]), .removeFromParent()]))
+                    if self.objective == .boss, self.starTimer <= 0, !self.player.isShielded,
+                       target.distance(to: self.player.position) < 60 {
+                        self.handleCaught()
+                    }
+                },
+                .removeFromParent()
+            ]))
+        }
+    }
+
+    /// Drop lingering static mines around the arena.
+    private func dropMines(count: Int) {
+        guard let v = villain else { return }
+        for i in 0..<count {
+            let a = CGFloat(i) / CGFloat(count) * .pi * 2
+            let pos = CGPoint(x: v.position.x + cos(a) * 180, y: v.position.y + sin(a) * 180)
+            let mine = SKShapeNode(circleOfRadius: 11)
+            mine.fillColor = Palette.villain.darker; mine.strokeColor = Palette.heroRed; mine.lineWidth = 2; mine.glowWidth = 3
+            mine.position = pos; mine.zPosition = ZLayer.items; mine.name = "mine"
+            let spike = SKShapeNode(path: starBurst(points: 8, outer: 14, inner: 8))
+            spike.fillColor = .clear; spike.strokeColor = Palette.heroRed; spike.lineWidth = 1.5; mine.addChild(spike)
+            mine.run(.repeatForever(.sequence([.fadeAlpha(to: 0.5, duration: 0.4), .fadeAlpha(to: 1, duration: 0.4)])))
+            mine.run(.sequence([.wait(forDuration: 6), .fadeOut(withDuration: 0.3), .removeFromParent()]))
+            worldNode.addChild(mine); bossProjectiles.append(mine)
+        }
+    }
+
+    private func starBurst(points: Int, outer: CGFloat, inner: CGFloat) -> CGPath {
+        let p = CGMutablePath(); let total = points * 2
+        for i in 0...total {
+            let r = i % 2 == 0 ? outer : inner
+            let a = CGFloat(i) / CGFloat(total) * .pi * 2
+            let pt = CGPoint(x: cos(a) * r, y: sin(a) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath(); return p
     }
 
     /// Fan of static bolts aimed at the hero.
