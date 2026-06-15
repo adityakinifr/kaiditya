@@ -74,6 +74,15 @@ final class GameScene: SKScene {
     private var arcadeDoor: CGPoint?
     private var missionsPortal: SKNode?
 
+    // Minigame (Crystal Catch)
+    private let mgLayer = SKNode()
+    private var mgCatcher: SKNode?
+    private var mgCrystals: [SKShapeNode] = []
+    private var mgScore = 0
+    private var mgTime: TimeInterval = 30
+    private var mgSpawn: TimeInterval = 0
+    private var mgOver = false
+
     // Camera shake
     private var shakeTime: TimeInterval = 0
     private var shakeMag: CGFloat = 0
@@ -91,7 +100,7 @@ final class GameScene: SKScene {
     private var bossHits = 0
 
     // Flow
-    private enum State { case title, map, shop, intro, tour, playing, dialogue, complete, won }
+    private enum State { case title, map, shop, intro, tour, playing, dialogue, complete, won, minigame }
     private var tourStep = 0
     private var state: State = .title
     private var lastUpdate: TimeInterval = 0
@@ -127,6 +136,11 @@ final class GameScene: SKScene {
         if ProcessInfo.processInfo.environment["KAIDITYA_HUB"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
+            }
+        }
+        if ProcessInfo.processInfo.environment["KAIDITYA_ARCADE"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.startMinigame()
             }
         }
         DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() }
@@ -1399,6 +1413,9 @@ final class GameScene: SKScene {
             case .dialogue: advanceDialogue(); return
             case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
             case .won:      cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
+            case .minigame:
+                if mgOver { closeMinigame() } else if !joystick.isActive { joystick.begin(at: camP, touch: t) }
+                return
             case .playing:  break
             }
             if !interactBtn.isHidden, interactBtn.enabled, interactBtn.contains(scenePoint: p, in: self) {
@@ -1461,6 +1478,7 @@ final class GameScene: SKScene {
             if code == .keyboardSpacebar || code == .keyboardReturnOrEnter || code == .keyboardJ { advanceDialogue() }
             return
         case .won: cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
+        case .minigame: if mgOver { closeMinigame() } else { pressedKeys.insert(code) }; return
         case .playing: break
         }
         switch code {
@@ -1614,6 +1632,8 @@ final class GameScene: SKScene {
         let dt = min(currentTime - lastUpdate, 1.0/30.0)
         lastUpdate = currentTime
         if demoMode { runDemo(dt: dt) }
+
+        if state == .minigame { updateMinigame(dt: dt); return }
 
         // Free-roam hub: move + contextual interactions, no stealth/objective.
         if inHub {
@@ -1922,8 +1942,106 @@ final class GameScene: SKScene {
         showShop()
     }
 
-    private func openArcade() {
-        hud.showToast("Arcade: Crystal Catch — coming soon!", color: Palette.heroRed)
+    private func openArcade() { startMinigame() }
+
+    // MARK: - Crystal Catch minigame
+
+    private func startMinigame() {
+        state = .minigame
+        setControlsHidden(true)
+        mgLayer.removeAllChildren(); mgLayer.removeFromParent()
+        mgCrystals = []; mgScore = 0; mgTime = 30; mgSpawn = 0; mgOver = false
+        mgLayer.zPosition = ZLayer.overlay
+        cam.addChild(mgLayer)
+
+        let bg = SKSpriteNode(color: SKColor(red: 0.08, green: 0.12, blue: 0.22, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        mgLayer.addChild(bg)
+        let title = SKLabelNode(text: "CRYSTAL CATCH"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 24
+        title.fontColor = Palette.crystal; title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 44); mgLayer.addChild(title)
+        let score = SKLabelNode(text: "0 ★"); score.name = "mgScore"; score.fontName = "AvenirNext-Heavy"; score.fontSize = 20
+        score.fontColor = Palette.energy; score.horizontalAlignmentMode = .left
+        score.position = CGPoint(x: -size.width/2 + 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(score)
+        let timer = SKLabelNode(text: "30s"); timer.name = "mgTimer"; timer.fontName = "AvenirNext-Heavy"; timer.fontSize = 20
+        timer.fontColor = .white; timer.horizontalAlignmentMode = .right
+        timer.position = CGPoint(x: size.width/2 - 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(timer)
+        let hint = SKLabelNode(text: "Drag / arrows to catch the crystals!")
+        hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
+        hint.position = CGPoint(x: 0, y: size.height/2 - safeTop - 72); mgLayer.addChild(hint)
+
+        // Basket catcher near the bottom.
+        let catcher = SKNode()
+        let basket = roundedRect(size: CGSize(width: 84, height: 30), corner: 10, color: Palette.heroBlue, stroke: .white, lineWidth: 2)
+        catcher.addChild(basket)
+        let rim = roundedRect(size: CGSize(width: 84, height: 8), corner: 4, color: Palette.crystal)
+        rim.position = CGPoint(x: 0, y: 13); catcher.addChild(rim)
+        catcher.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 90)
+        catcher.zPosition = 2; mgLayer.addChild(catcher); mgCatcher = catcher
+    }
+
+    private func updateMinigame(dt: TimeInterval) {
+        guard !mgOver, let catcher = mgCatcher else { return }
+        // Move catcher.
+        let dx = joystick.vector.dx + keyboardVector().dx
+        let halfW = size.width/2 - 50
+        catcher.position.x = max(-halfW, min(halfW, catcher.position.x + dx * 460 * CGFloat(dt)))
+
+        // Timer.
+        mgTime -= dt
+        (mgLayer.childNode(withName: "mgTimer") as? SKLabelNode)?.text = "\(max(0, Int(ceil(mgTime))))s"
+        if mgTime <= 0 { endMinigame(); return }
+
+        // Spawn falling crystals.
+        mgSpawn += dt
+        if mgSpawn > 0.62 {
+            mgSpawn = 0
+            let c = CharacterFactory.makeCrystal(); c.setScale(0.85)
+            c.position = CGPoint(x: CGFloat.random(in: -halfW...halfW), y: size.height/2 - safeTop - 100)
+            c.zPosition = 1; mgLayer.addChild(c); mgCrystals.append(c)
+        }
+        let fall: CGFloat = 320
+        let catchY = catcher.position.y
+        for c in mgCrystals where c.parent != nil {
+            c.position.y -= fall * CGFloat(dt)
+            c.zRotation += CGFloat(dt) * 3
+            if c.position.y <= catchY + 18 && c.position.y >= catchY - 24 && abs(c.position.x - catcher.position.x) < 52 {
+                c.removeFromParent(); mgScore += 1
+                (mgLayer.childNode(withName: "mgScore") as? SKLabelNode)?.text = "\(mgScore) ★"
+                SoundFX.shared.play("coin")
+                blipMG(c.position, "+1", Palette.energy)
+            } else if c.position.y < -size.height/2 - 30 {
+                c.removeFromParent()
+            }
+        }
+        mgCrystals.removeAll { $0.parent == nil }
+    }
+
+    private func blipMG(_ pos: CGPoint, _ text: String, _ color: SKColor) {
+        let s = SKLabelNode(text: text); s.fontName = "AvenirNext-Heavy"; s.fontSize = 18; s.fontColor = color
+        s.position = pos; s.zPosition = 5; mgLayer.addChild(s)
+        s.run(.sequence([.group([.moveBy(x: 0, y: 40, duration: 0.5), .fadeOut(withDuration: 0.5)]), .removeFromParent()]))
+    }
+
+    private func endMinigame() {
+        mgOver = true
+        Economy.addCoins(mgScore)
+        SoundFX.shared.play("clear")
+        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 200), corner: 20, color: Palette.hudPanel)
+        card.strokeColor = Palette.energy; card.lineWidth = 3; card.zPosition = 10; mgLayer.addChild(card)
+        let t = SKLabelNode(text: "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"; t.fontSize = 28; t.fontColor = Palette.energy
+        t.position = CGPoint(x: 0, y: 56); card.addChild(t)
+        let r = SKLabelNode(text: "Caught \(mgScore) crystals"); r.fontName = "AvenirNext-Bold"; r.fontSize = 17; r.fontColor = .white
+        r.position = CGPoint(x: 0, y: 14); card.addChild(r)
+        let c = SKLabelNode(text: "+\(mgScore) ★  coins"); c.fontName = "AvenirNext-Heavy"; c.fontSize = 18; c.fontColor = Palette.crystal
+        c.position = CGPoint(x: 0, y: -18); card.addChild(c)
+        let go = SKLabelNode(text: "tap to continue ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
+        go.position = CGPoint(x: 0, y: -62); card.addChild(go)
+        dramatize(card, in: mgLayer, accent: Palette.energy, rays: false)
+    }
+
+    private func closeMinigame() {
+        mgLayer.removeAllChildren(); mgLayer.removeFromParent()
+        mgCrystals = []; mgCatcher = nil
+        enterHub()   // back to town with updated coins
     }
 
     private func nearestNPC() -> NPC? {
@@ -2255,6 +2373,7 @@ final class GameScene: SKScene {
         case .complete: if tap(1.5) { cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1) }; return
         case .dialogue: if tap(0.7) { advanceDialogue() }; return
         case .won: return
+        case .minigame: if mgOver, tap(1.0) { closeMinigame() }; return
         case .playing: break
         }
 
