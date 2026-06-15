@@ -105,28 +105,43 @@ enum CharacterFactory {
         return node
     }
 
-    /// Villain minion (the things you sneak past).
+    /// Villain minion — a static-bot guard with a glowing scanner visor.
     static func makeMinion() -> SKNode {
         let node = SKNode()
         let shadow = Effects.groundShadow(width: 32, height: 12)
         shadow.position = CGPoint(x: 0, y: -17)
         node.addChild(shadow)
-        let body = roundedRect(size: CGSize(width: 26, height: 30), corner: 7,
+
+        let body = roundedRect(size: CGSize(width: 28, height: 32), corner: 8,
                                color: Palette.minion, stroke: Palette.minion.darker, lineWidth: 1.5)
         node.addChild(body)
+        // little bolt insignia
+        let bolt = SKShapeNode(path: boltPath()); bolt.setScale(0.7)
+        bolt.fillColor = Palette.energy; bolt.strokeColor = .clear
+        bolt.position = CGPoint(x: 0, y: 4); node.addChild(bolt)
+        // shoulder plates
+        for sx in [-1.0, 1.0] {
+            let plate = roundedRect(size: CGSize(width: 7, height: 14), corner: 3, color: Palette.minion.darker)
+            plate.position = CGPoint(x: CGFloat(sx) * 16, y: 6); node.addChild(plate)
+        }
 
-        let head = SKShapeNode(circleOfRadius: 11)
-        head.fillColor = Palette.minion.lighter
-        head.strokeColor = Palette.minion.darker
-        head.lineWidth = 1.5
-        head.position = CGPoint(x: 0, y: 22)
-        node.addChild(head)
-
-        // Angry visor
-        let visor = roundedRect(size: CGSize(width: 18, height: 6), corner: 2, color: Palette.heroRed)
-        visor.position = CGPoint(x: 0, y: 22)
-        visor.zRotation = -0.12
-        node.addChild(visor)
+        // Helmet head
+        let head = roundedRect(size: CGSize(width: 24, height: 20), corner: 9,
+                               color: Palette.minion.lighter, stroke: Palette.minion.darker, lineWidth: 1.5)
+        head.position = CGPoint(x: 0, y: 24); node.addChild(head)
+        // Glowing scanner visor with a pulsing light
+        let visor = roundedRect(size: CGSize(width: 20, height: 7), corner: 3.5, color: Palette.ink)
+        visor.position = CGPoint(x: 0, y: 24); node.addChild(visor)
+        let scan = SKShapeNode(circleOfRadius: 2.6)
+        scan.fillColor = Palette.heroRed; scan.strokeColor = .white; scan.lineWidth = 0.6; scan.glowWidth = 3
+        scan.position = CGPoint(x: 0, y: 24)
+        scan.run(.repeatForever(.sequence([.moveBy(x: 6, y: 0, duration: 0.5), .moveBy(x: -12, y: 0, duration: 1.0), .moveBy(x: 6, y: 0, duration: 0.5)])))
+        node.addChild(scan)
+        // antenna
+        let ant = SKShapeNode(path: { let p = CGMutablePath(); p.move(to: CGPoint(x: 0, y: 34)); p.addLine(to: CGPoint(x: 4, y: 42)); return p }())
+        ant.strokeColor = Palette.minion.darker; ant.lineWidth = 2; node.addChild(ant)
+        let tip = SKShapeNode(circleOfRadius: 2.5); tip.fillColor = Palette.energy; tip.strokeColor = .clear; tip.glowWidth = 2
+        tip.position = CGPoint(x: 4, y: 43); node.addChild(tip)
         node.name = "minion"
         return node
     }

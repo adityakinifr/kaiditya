@@ -64,6 +64,11 @@ final class GameScene: SKScene {
     // Progression / map
     private var maxUnlocked = 0
 
+    // Camera shake
+    private var shakeTime: TimeInterval = 0
+    private var shakeMag: CGFloat = 0
+    private var shakeElapsed: TimeInterval = 0
+
     // Atmosphere (parented to camera)
     private var ambientOverlay: SKSpriteNode?
     private var vignetteNode: SKSpriteNode?
@@ -99,6 +104,7 @@ final class GameScene: SKScene {
         addChild(cam)
         addChild(worldNode)
         maxUnlocked = UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked")
+        SoundFX.shared.warmUp()
         setupControls()
         updateSafeInsets()
         layoutHUD()
@@ -258,6 +264,7 @@ final class GameScene: SKScene {
         hud.updateCrystals(0)
         hud.updateCoins(0)
         hud.updateEnergy(1)
+        hud.hideBossBar()
         refreshQuestMarkers()
         showLevelIntro()
     }
@@ -385,18 +392,18 @@ final class GameScene: SKScene {
 
         let pp = player.position
         for c in coinNodes where c.parent != nil && c.position.distance(to: pp) < 38 {
-            c.removeFromParent(); coins += 1; hud.updateCoins(coins); blip(c.position, "★", Palette.energy)
+            c.removeFromParent(); coins += 1; hud.updateCoins(coins); blip(c.position, "★", Palette.energy); SoundFX.shared.play("coin")
         }
         if let k = keycardNode, k.parent != nil, k.position.distance(to: pp) < 42 {
             k.removeFromParent(); hasKeycard = true
             hud.showToast("Keycard! The exit is unlocked.", color: Palette.energy)
-            exitPortal?.run(.fadeIn(withDuration: 0.3))
+            exitPortal?.run(.fadeIn(withDuration: 0.3)); SoundFX.shared.play("powerup")
         }
         for m in magnetNodes where m.parent != nil && m.position.distance(to: pp) < 40 {
-            m.removeFromParent(); magnetTimer = 6; hud.showToast("Crystal Magnet! 🧲", color: Palette.crystal)
+            m.removeFromParent(); magnetTimer = 6; hud.showToast("Crystal Magnet! 🧲", color: Palette.crystal); SoundFX.shared.play("powerup")
         }
         for s in starNodes where s.parent != nil && s.position.distance(to: pp) < 40 {
-            s.removeFromParent(); starTimer = 6; player.setStar(true); hud.showToast("Super Star — invincible!", color: Palette.energy)
+            s.removeFromParent(); starTimer = 6; player.setStar(true); hud.showToast("Super Star — invincible!", color: Palette.energy); SoundFX.shared.play("powerup")
         }
         if magnetTimer > 0 && objective == .collect && player.inCostume {
             for c in crystalNodes where c.parent != nil && c.position.distance(to: pp) < 200 {
@@ -802,6 +809,7 @@ final class GameScene: SKScene {
         player.position.y -= 60
         player.carNode?.run(.sequence([.rotate(byAngle: .pi * 2, duration: 0.5), .run { [weak self] in self?.player.carNode?.zRotation = 0 }]))
         car.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
+        SoundFX.shared.play("crash"); shake(11, 0.3)
         hud.showToast("CRASH! 💥", color: Palette.heroRed)
         let flash = SKSpriteNode(color: SKColor(red:1,green:0.3,blue:0.2,alpha:0.35), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
@@ -1042,6 +1050,7 @@ final class GameScene: SKScene {
     private func showLevelComplete() {
         state = .complete
         setControlsHidden(true)
+        SoundFX.shared.play("clear")
         let overlay = SKNode()
         overlay.name = "completeOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55), size: CGSize(width: 4000, height: 4000))
@@ -1077,6 +1086,7 @@ final class GameScene: SKScene {
     private func showWinScreen() {
         state = .won
         setControlsHidden(true)
+        SoundFX.shared.play("win")
         let overlay = SKNode(); overlay.name = "winOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.62), size: CGSize(width: 5000, height: 5000))
         overlay.addChild(dim)
@@ -1181,11 +1191,11 @@ final class GameScene: SKScene {
             }
             if dashBtn.contains(scenePoint: p, in: self) {
                 dashBtn.press(); buttonTouches[ObjectIdentifier(t)] = dashBtn
-                if !player.tryDash() { hud.showToast("Need power!", color: Palette.heroRed) }; continue
+                if player.tryDash() { SoundFX.shared.play("dash") } else { hud.showToast("Need power!", color: Palette.heroRed) }; continue
             }
             if shieldBtn.contains(scenePoint: p, in: self) {
                 shieldBtn.press(); buttonTouches[ObjectIdentifier(t)] = shieldBtn
-                if player.tryShield() { hud.showToast("Shield up!", color: Palette.hudAccent) }
+                if player.tryShield() { hud.showToast("Shield up!", color: Palette.hudAccent); SoundFX.shared.play("shield") }
                 else { hud.showToast("Need power!", color: Palette.heroRed) }; continue
             }
             if disguiseBtn.contains(scenePoint: p, in: self) {
@@ -1235,9 +1245,9 @@ final class GameScene: SKScene {
         }
         switch code {
         case .keyboardSpacebar, .keyboardReturnOrEnter, .keyboardJ: nearestInteract?()
-        case .keyboardK: if !player.tryDash() { hud.showToast("Need power!", color: Palette.heroRed) }
+        case .keyboardK: if player.tryDash() { SoundFX.shared.play("dash") } else { hud.showToast("Need power!", color: Palette.heroRed) }
         case .keyboardL:
-            if player.tryShield() { hud.showToast("Shield up!", color: Palette.hudAccent) }
+            if player.tryShield() { hud.showToast("Shield up!", color: Palette.hudAccent); SoundFX.shared.play("shield") }
             else { hud.showToast("Need power!", color: Palette.heroRed) }
         case .keyboardH: toggleDisguise()
         default: pressedKeys.insert(code); nudge(for: code)
@@ -1303,7 +1313,7 @@ final class GameScene: SKScene {
         if level.isDriving {
             if state == .playing { updateDriving(dt: dt) }
             player.update(dt: dt)
-            cam.position = drivingCamera()
+            cam.position = cameraWithShake(drivingCamera(), dt: dt)
             hud.updateEnergy(player.energyPct)
             if !demoMode { dashBtn.setEnabled(player.energy >= 25) }
             return
@@ -1311,7 +1321,7 @@ final class GameScene: SKScene {
 
         if state == .playing { movePlayer(dt: dt) }
         player.update(dt: dt)
-        cam.position = clampedCamera(player.position)
+        cam.position = cameraWithShake(clampedCamera(player.position), dt: dt)
 
         for m in minions { m.update(dt: dt) }
         if state == .playing {
@@ -1327,6 +1337,21 @@ final class GameScene: SKScene {
             dashBtn.setEnabled(player.energy >= 25)
             shieldBtn.setEnabled(player.energy >= 35 && !player.isShielded)
         }
+    }
+
+    func shake(_ mag: CGFloat, _ dur: TimeInterval) {
+        shakeMag = max(shakeMag, mag)
+        shakeTime = max(shakeTime, dur)
+    }
+
+    private func cameraWithShake(_ base: CGPoint, dt: TimeInterval) -> CGPoint {
+        guard shakeTime > 0 else { return base }
+        shakeTime -= dt; shakeElapsed += dt
+        let amp = shakeMag * min(1, CGFloat(shakeTime) / 0.2 + 0.25)
+        let ox = sin(CGFloat(shakeElapsed) * 92) * amp
+        let oy = cos(CGFloat(shakeElapsed) * 71) * amp
+        if shakeTime <= 0 { shakeMag = 0 }
+        return CGPoint(x: base.x + ox, y: base.y + oy)
     }
 
     private func clampedCamera(_ pos: CGPoint) -> CGPoint {
@@ -1370,6 +1395,7 @@ final class GameScene: SKScene {
         let flash = SKSpriteNode(color: SKColor(red:1,green:0,blue:0,alpha:0.4), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
+        SoundFX.shared.play("caught"); shake(9, 0.25)
         // During the boss fight, a hit just knocks you back a little (don't reset the arena).
         if objective == .boss {
             hud.showToast("Zapped! 💥", color: Palette.heroRed)
@@ -1399,6 +1425,7 @@ final class GameScene: SKScene {
         c.removeFromParent()
         crystals += 1
         player.addEnergy(18)
+        SoundFX.shared.play("collect")
         hud.updateCrystals(crystals)
         hud.showToast("Energy Crystal! ✦  (\(crystals)/\(level.crystalsRequired))", color: Palette.crystal)
         let spark = SKLabelNode(text: "✦"); spark.fontSize = 28; spark.fontColor = Palette.crystal
@@ -1464,7 +1491,8 @@ final class GameScene: SKScene {
         if objective == .charge, let core = powerCore, core.position.distance(to: player.position) < 80 {
             enabled = true; label = "CHARGE"; nearestInteract = { [weak self] in self?.chargeCore() }
         }
-        if objective == .boss, let v = villain, v.position.distance(to: player.position) < 96 {
+        if objective == .boss, action(forKey: "bossLoop") == nil,
+           let v = villain, v.position.distance(to: player.position) < 96 {
             enabled = true; label = "FIGHT"; nearestInteract = { [weak self] in self?.fightVillain() }
         }
         interactBtn.setTitle(label)
@@ -1495,6 +1523,7 @@ final class GameScene: SKScene {
     private func chargeCore() {
         guard let core = powerCore else { return }
         objective = .reachExit
+        SoundFX.shared.play("powerup"); shake(6, 0.25)
         core.run(.sequence([.scale(to: 1.3, duration: 0.2), .scale(to: 1.0, duration: 0.2)]))
         let burst = SKShapeNode(circleOfRadius: 40); burst.strokeColor = biome.accent; burst.lineWidth = 4; burst.fillColor = .clear
         burst.position = core.position; burst.zPosition = ZLayer.fx; worldNode.addChild(burst)
@@ -1504,7 +1533,7 @@ final class GameScene: SKScene {
     }
 
     private func fightVillain() {
-        guard objective == .boss else { return }
+        guard objective == .boss, action(forKey: "bossLoop") == nil else { return }  // don't restart mid-fight
         objective = .done   // lock interaction; boss loop drives the rest
         showDialogue(speaker: "Lord Chow-Chow", lines: [
             "You?! A pint-sized hero?",
@@ -1518,6 +1547,7 @@ final class GameScene: SKScene {
 
     private func beginBossFight() {
         guard let v = villain else { return }
+        hud.showBossBar(name: "LORD CHOW-CHOW", total: 3 * level.bossPhases)
         v.run(.repeatForever(.sequence([.moveBy(x: 140, y: 0, duration: 0.8), .moveBy(x: -140, y: 0, duration: 0.8)])), withKey: "dodge")
         run(.repeatForever(.sequence([.wait(forDuration: 0.05), .run { [weak self] in self?.checkBossHit() }])), withKey: "bossLoop")
         // Attack scheduler: patterns escalate with the phase.
@@ -1595,6 +1625,8 @@ final class GameScene: SKScene {
                     blast.position = target; blast.zPosition = ZLayer.fx
                     self.worldNode.addChild(blast)
                     blast.run(.sequence([.group([.scale(to: 1.25, duration: 0.18), .fadeOut(withDuration: 0.3)]), .removeFromParent()]))
+                    SoundFX.shared.play("hit")
+                    if target.distance(to: self.player.position) < 150 { self.shake(6, 0.18) }
                     if self.objective == .boss, self.starTimer <= 0, !self.player.isShielded,
                        target.distance(to: self.player.position) < 60 {
                         self.handleCaught()
@@ -1708,6 +1740,8 @@ final class GameScene: SKScene {
             let pow = SKLabelNode(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
             pow.position = CGPoint(x: v.position.x, y: v.position.y + 50); pow.zPosition = ZLayer.fx; worldNode.addChild(pow)
             pow.run(.sequence([.group([.moveBy(x:0,y:30,duration:0.4), .fadeOut(withDuration:0.4)]), .removeFromParent()]))
+            SoundFX.shared.play("hit"); shake(8, 0.18)
+            hud.updateBossHealth(remaining: totalNeeded - bossHits, total: totalNeeded)
             hud.showToast("Hit \(bossHits)/\(totalNeeded)!", color: Palette.energy)
             // Phase transition?
             if bossHits < totalNeeded && bossHits % hitsPerPhase == 0 {
@@ -1721,6 +1755,7 @@ final class GameScene: SKScene {
     private func startBossPhase() {
         guard let v = villain else { return }
         hud.showToast("Lord Chow-Chow is FURIOUS! Phase \(bossPhase)!", color: Palette.heroRed)
+        SoundFX.shared.play("caught"); shake(12, 0.4)
         let flash = SKSpriteNode(color: SKColor(red:1,green:0.2,blue:0.2,alpha:0.4), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
@@ -1743,6 +1778,8 @@ final class GameScene: SKScene {
         bossProjectiles.forEach { $0.removeFromParent() }
         bossProjectiles = []
         objective = .done
+        hud.hideBossBar()
+        SoundFX.shared.play("hit"); shake(16, 0.6)
         villain?.removeAction(forKey: "dodge")
         villain?.run(.sequence([
             .group([.rotate(byAngle: .pi*4, duration: 0.8), .scale(to: 0.1, duration: 0.8), .fadeOut(withDuration: 0.8)]),

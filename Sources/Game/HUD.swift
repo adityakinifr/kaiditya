@@ -24,6 +24,13 @@ final class HUD: SKNode {
     private let toastBanner = SKNode()
     private var toastBG = SKShapeNode()
     private let toast = SKLabelNode()
+
+    // Boss health bar (shown during a boss fight)
+    private let bossBar = SKNode()
+    private var bossBarBG = SKShapeNode()
+    private var bossBarFill = SKShapeNode()
+    private let bossName = SKLabelNode()
+    private var bossBarWidth: CGFloat = 220
     private var size: CGSize = .zero
     private var lastEnergy: CGFloat = 1
     private var topInsetStored: CGFloat = 20
@@ -121,6 +128,56 @@ final class HUD: SKNode {
         toast.verticalAlignmentMode = .center
         toast.horizontalAlignmentMode = .center
         toastBanner.addChild(toast)
+
+        // Boss bar (hidden until a boss fight)
+        bossBar.zPosition = ZLayer.hud
+        bossBar.isHidden = true
+        addChild(bossBar)
+        bossName.fontName = "AvenirNext-Heavy"; bossName.fontSize = 13; bossName.fontColor = Palette.heroRed
+        bossName.verticalAlignmentMode = .center; bossName.horizontalAlignmentMode = .center
+        bossBar.addChild(bossName)
+    }
+
+    func showBossBar(name: String, total: Int) {
+        let halfW = size.width / 2, halfH = size.height / 2
+        let pad: CGFloat = 12, clusterW: CGFloat = 132
+        let top = halfH - topInsetStored - pad
+        bossBarWidth = size.width - clusterW - 28
+        let centerX = (-halfW + 12 + (halfW - clusterW - 12)) / 2
+        missionContainer.isHidden = true
+
+        bossBarBG.removeFromParent(); bossBarFill.removeFromParent()
+        bossBarBG = roundedRect(size: CGSize(width: bossBarWidth, height: 16), corner: 8, color: SKColor(white: 0, alpha: 0.55))
+        bossBarBG.strokeColor = Palette.heroRed; bossBarBG.lineWidth = 1.5
+        bossBarBG.position = CGPoint(x: centerX, y: top - 30); bossBar.addChild(bossBarBG)
+        bossBarFill = roundedRect(size: CGSize(width: bossBarWidth - 4, height: 12), corner: 6, color: Palette.heroRed)
+        bossBarFill.position = bossBarBG.position; bossBarFill.zPosition = 1; bossBar.addChild(bossBarFill)
+        // phase tick marks
+        if total > 3 {
+            for s in stride(from: 3, to: total, by: 3) {
+                let frac = CGFloat(s) / CGFloat(total)
+                let tick = SKSpriteNode(color: SKColor(white: 0, alpha: 0.7), size: CGSize(width: 2, height: 16))
+                tick.position = CGPoint(x: centerX - bossBarWidth/2 + bossBarWidth * frac, y: top - 30)
+                tick.zPosition = 2; bossBar.addChild(tick)
+            }
+        }
+        bossName.text = "⚡ \(name) ⚡"
+        bossName.position = CGPoint(x: centerX, y: top - 8)
+        bossBar.isHidden = false
+        updateBossHealth(remaining: total, total: total)
+    }
+
+    func updateBossHealth(remaining: Int, total: Int) {
+        let p = max(0, min(1, CGFloat(remaining) / CGFloat(max(1, total))))
+        bossBarFill.xScale = max(0.001, p)
+        let leftX = bossBarBG.position.x - (bossBarWidth - 4) / 2
+        bossBarFill.position = CGPoint(x: leftX + (bossBarWidth - 4) * p / 2, y: bossBarBG.position.y)
+        bossBarFill.fillColor = p < 0.34 ? Palette.energy : Palette.heroRed
+    }
+
+    func hideBossBar() {
+        bossBar.isHidden = true
+        missionContainer.isHidden = false
     }
 
     func layout(for size: CGSize, topInset: CGFloat = 0) {
