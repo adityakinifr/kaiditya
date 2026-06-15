@@ -54,14 +54,20 @@ final class Player: SKNode {
 
     func setCostume(_ on: Bool) {
         inCostume = on
+        let costume = Economy.equippedCostume
         // Hero-only parts: cape, mask, chest emblem.
         for name in ["cape", "mask", "emblem"] {
             visual.enumerateChildNodes(withName: name) { node, _ in node.isHidden = !on }
         }
-        // The suit recolors to plain civilian clothes while undercover.
+        // Cape uses the equipped costume color.
+        if let cape = visual.childNode(withName: "cape") as? SKShapeNode {
+            cape.fillColor = costume.cape; cape.strokeColor = costume.cape.darker
+        }
+        // The suit uses the costume color in hero mode, plain clothes when undercover.
         if let suit = visual.childNode(withName: "suit") as? SKShapeNode {
-            suit.fillColor = on ? Palette.heroBlue : SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)
-            suit.strokeColor = (on ? Palette.heroBlue : SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)).darker
+            let civil = SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)
+            suit.fillColor = on ? costume.suit : civil
+            suit.strokeColor = (on ? costume.suit : civil).darker
         }
         // A little puff when switching.
         let puff = SKShapeNode(circleOfRadius: 26)

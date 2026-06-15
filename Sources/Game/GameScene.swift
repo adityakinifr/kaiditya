@@ -1111,6 +1111,32 @@ final class GameScene: SKScene {
             overlay.addChild(row)
             y -= rowH + 12
         }
+
+        // Costume picker.
+        let costLbl = SKLabelNode(text: "COSTUMES"); costLbl.fontName = "AvenirNext-Heavy"; costLbl.fontSize = 14
+        costLbl.fontColor = Palette.hudAccent; costLbl.position = CGPoint(x: 0, y: y - 6); overlay.addChild(costLbl)
+        let all = Costume.allCases
+        let sw: CGFloat = 50, gap: CGFloat = 12
+        let totalW = CGFloat(all.count) * sw + CGFloat(all.count - 1) * gap
+        var cx = -totalW/2 + sw/2
+        for c in all {
+            let node = SKNode(); node.position = CGPoint(x: cx, y: y - 56); node.name = "cosrow_\(c.rawValue)"
+            let body = roundedRect(size: CGSize(width: sw, height: sw), corner: 10, color: c.suit)
+            let equipped = Economy.equippedCostume == c
+            let owned = Economy.ownedCostume(c)
+            body.strokeColor = equipped ? Palette.energy : (owned ? .white : SKColor(white: 0.45, alpha: 1))
+            body.lineWidth = equipped ? 3.5 : 2
+            node.addChild(body)
+            let capeChip = roundedRect(size: CGSize(width: 14, height: 22), corner: 3, color: c.cape)
+            capeChip.position = CGPoint(x: 14, y: -4); node.addChild(capeChip)
+            let tag = SKLabelNode(text: equipped ? "✓" : (owned ? c.name : "\(c.price)★"))
+            tag.fontName = "AvenirNext-Bold"; tag.fontSize = equipped ? 16 : 9
+            tag.fontColor = equipped ? Palette.energy : .white; tag.verticalAlignmentMode = .center
+            tag.position = CGPoint(x: 0, y: -sw/2 - 9); node.addChild(tag)
+            overlay.addChild(node)
+            cx += sw + gap
+        }
+
         let back = roundedRect(size: CGSize(width: 160, height: 44), corner: 14, color: Palette.heroBlue)
         back.strokeColor = .white; back.lineWidth = 2; back.name = "shopBack"
         back.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 34)
@@ -1127,6 +1153,14 @@ final class GameScene: SKScene {
         for u in Upgrade.allCases {
             if let row = overlay.childNode(withName: "shoprow_\(u.rawValue)"), row.contains(camP) {
                 if Economy.buy(u) { SoundFX.shared.play("powerup"); showShop() }   // refresh
+                else { SoundFX.shared.play("caught") }
+                return
+            }
+        }
+        for c in Costume.allCases {
+            if let node = overlay.childNode(withName: "cosrow_\(c.rawValue)"),
+               node.contains(cam.convert(camP, to: node.parent!)) {
+                if Economy.selectCostume(c) { SoundFX.shared.play("powerup"); showShop() }
                 else { SoundFX.shared.play("caught") }
                 return
             }

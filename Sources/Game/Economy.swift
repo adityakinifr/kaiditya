@@ -1,4 +1,46 @@
-import Foundation
+import SpriteKit
+
+/// Cosmetic hero costumes (suit + cape colors).
+enum Costume: String, CaseIterable {
+    case classic, crimson, emerald, shadow, gold
+
+    var name: String {
+        switch self {
+        case .classic: return "Classic"
+        case .crimson: return "Crimson"
+        case .emerald: return "Emerald"
+        case .shadow:  return "Shadow"
+        case .gold:    return "Golden"
+        }
+    }
+    var price: Int {
+        switch self {
+        case .classic: return 0
+        case .crimson: return 10
+        case .emerald: return 12
+        case .shadow:  return 18
+        case .gold:    return 25
+        }
+    }
+    var suit: SKColor {
+        switch self {
+        case .classic: return Palette.heroBlue
+        case .crimson: return SKColor(red: 0.86, green: 0.22, blue: 0.26, alpha: 1)
+        case .emerald: return SKColor(red: 0.20, green: 0.66, blue: 0.42, alpha: 1)
+        case .shadow:  return SKColor(red: 0.26, green: 0.24, blue: 0.34, alpha: 1)
+        case .gold:    return SKColor(red: 0.90, green: 0.72, blue: 0.20, alpha: 1)
+        }
+    }
+    var cape: SKColor {
+        switch self {
+        case .classic: return Palette.heroRed
+        case .crimson: return SKColor(red: 0.55, green: 0.12, blue: 0.15, alpha: 1)
+        case .emerald: return SKColor(red: 0.12, green: 0.42, blue: 0.26, alpha: 1)
+        case .shadow:  return SKColor(red: 0.12, green: 0.11, blue: 0.18, alpha: 1)
+        case .gold:    return Palette.heroBlue
+        }
+    }
+}
 
 /// Persistent coin bank + purchasable hero upgrades (the start of a
 /// Sneaky-Sasquatch-style economy).
@@ -57,6 +99,27 @@ enum Economy {
         guard !owned(u), coins >= u.price else { return false }
         UserDefaults.standard.set(coins - u.price, forKey: coinKey)
         UserDefaults.standard.set(true, forKey: upKey(u))
+        return true
+    }
+
+    // MARK: Costumes
+
+    static func ownedCostume(_ c: Costume) -> Bool {
+        c == .classic || UserDefaults.standard.bool(forKey: "kaiditya.cos.\(c.rawValue)")
+    }
+    static var equippedCostume: Costume {
+        Costume(rawValue: UserDefaults.standard.string(forKey: "kaiditya.costume") ?? "") ?? .classic
+    }
+    static func equip(_ c: Costume) { UserDefaults.standard.set(c.rawValue, forKey: "kaiditya.costume") }
+
+    /// Buy (and auto-equip) a costume, or just equip if already owned.
+    @discardableResult
+    static func selectCostume(_ c: Costume) -> Bool {
+        if ownedCostume(c) { equip(c); return true }
+        guard coins >= c.price else { return false }
+        UserDefaults.standard.set(coins - c.price, forKey: coinKey)
+        UserDefaults.standard.set(true, forKey: "kaiditya.cos.\(c.rawValue)")
+        equip(c)
         return true
     }
 }
