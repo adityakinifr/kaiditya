@@ -11,24 +11,27 @@ chase**. Concepts build up level by level, Sneaky-Sasquatch style.
 Built with **SpriteKit** (native iOS). All art is drawn procedurally in code, so
 there are no external asset dependencies.
 
-## Levels (9, progressive mechanics)
+## Levels (11, progressive mechanics)
 
 1. **Sunnyside Park** (day) — basics: move, talk, collect crystals, stealth + the
    secret-identity disguise, charge the Power Core.
-2. **Highway Chase** (driving) — drive up a curving highway chasing the getaway
-   truck: overtake same-direction traffic, BOOST to keep up. He runs fast then tires.
+2. **Highway Chase** (driving) — chase the getaway truck up a curving highway;
+   overtake same-direction traffic, BOOST to keep up. He runs fast then tires.
 3. **Static Docks** (dusk) — advanced stealth: crates for cover, faster minions.
-4. **City Rooftops** (night) — drones + sweeping searchlights + coins + a keycard that
-   unlocks the fire-escape.
-5. **Secret Lab** (bright) — a toggling laser grid, speed pads, a crystal-magnet
-   power-up, and a water spill that slows you.
-6. **Flooded Sewers** (murky) — wade through water, grab a Super-Star for invincibility,
-   pull off stealth takedowns on patrols.
-7. **Harbor Boat Chase** (water) — switch to a speedboat and chase Chow-Chow's boat
-   across the bay, dodging barges.
-8. **Static Tower** (electric night) — searchlights + a Super-Star, climb to the top.
-9. **Chow-Chow's Fortress** (finale) — power up, then a **multi-phase boss fight**
-   (he gets furious and summons guards) — SHIELD up, DASH in.
+4. **City Rooftops** (night) — drones + sweeping searchlights + coins + a keycard.
+5. **Secret Lab** (bright) — a toggling laser grid, speed pads, crystal-magnet, water.
+6. **Flooded Sewers** (murky) — wade through water, grab a Super-Star, stealth takedowns.
+7. **Downtown Gauntlet** (big) — a sprawling night-city run combining lasers, drones,
+   searchlights, water and a keycard hunt across a large map (7 crystals).
+8. **Harbor Boat Chase** (water) — switch to a speedboat and chase across the bay.
+9. **The Power Plant** (big) — a massive laser-grid reactor guarding 8 crystals,
+   with a magnet and a Super-Star to help.
+10. **Static Tower** (electric night) — searchlights + a Super-Star, climb to the top.
+11. **Chow-Chow's Fortress** (finale) — power up, then a **multi-phase boss fight**
+    with escalating attacks (volleys, spirals, ground strikes, mines, rings, charges)
+    and summoned guards.
+
+Reachable from a **level-select map** with persistent unlock progress.
 
 Each level has a dramatic intro card, a distinct biome/palette, atmosphere overlays
 and particles, and a level-complete celebration.
@@ -44,7 +47,10 @@ chase** · curved roads + same-direction traffic + crashes · **coins/economy** 
 slow zones** · **stealth takedowns** · **drone enemies** · **multi-phase boss** with
 escalating **attack patterns** (bolt volleys, shockwave rings, charge lunges) and
 summoned guards · a **level-select map** with persistent unlock progress ·
-dramatic cinematic popups · pill-banner toasts · hardware-keyboard support.
+dramatic cinematic popups · pill-banner toasts · camera **screenshake** ·
+**procedural sound effects + looping background music** (synthesized at runtime,
+no audio assets — explore / stealth / chase / boss / menu themes) ·
+hardware-keyboard support.
 
 ## Gameplay
 

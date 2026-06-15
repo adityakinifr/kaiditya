@@ -266,6 +266,10 @@ final class GameScene: SKScene {
         hud.updateEnergy(1)
         hud.hideBossBar()
         refreshQuestMarkers()
+        // Background music by level mood.
+        if level.isDriving { SoundFX.shared.playMusic("chase") }
+        else if level.index == 1 { SoundFX.shared.playMusic("explore") }
+        else { SoundFX.shared.playMusic("stealth") }
         showLevelIntro()
     }
 
@@ -877,6 +881,7 @@ final class GameScene: SKScene {
     private func showTitle() {
         state = .title
         setControlsHidden(true)
+        SoundFX.shared.playMusic("menu")
         let overlay = SKNode()
         overlay.name = "titleOverlay"; overlay.zPosition = ZLayer.overlay
 
@@ -921,6 +926,7 @@ final class GameScene: SKScene {
     private func showMap() {
         state = .map
         setControlsHidden(true)
+        SoundFX.shared.playMusic("menu")
         cam.childNode(withName: "mapOverlay")?.removeFromParent()
         let overlay = SKNode(); overlay.name = "mapOverlay"; overlay.zPosition = ZLayer.overlay
         let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
@@ -1086,6 +1092,7 @@ final class GameScene: SKScene {
     private func showWinScreen() {
         state = .won
         setControlsHidden(true)
+        SoundFX.shared.stopMusic()
         SoundFX.shared.play("win")
         let overlay = SKNode(); overlay.name = "winOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.62), size: CGSize(width: 5000, height: 5000))
@@ -1548,6 +1555,7 @@ final class GameScene: SKScene {
     private func beginBossFight() {
         guard let v = villain else { return }
         hud.showBossBar(name: "LORD CHOW-CHOW", total: 3 * level.bossPhases)
+        SoundFX.shared.playMusic("boss", volume: 0.55)
         v.run(.repeatForever(.sequence([.moveBy(x: 140, y: 0, duration: 0.8), .moveBy(x: -140, y: 0, duration: 0.8)])), withKey: "dodge")
         run(.repeatForever(.sequence([.wait(forDuration: 0.05), .run { [weak self] in self?.checkBossHit() }])), withKey: "bossLoop")
         // Attack scheduler: patterns escalate with the phase.

@@ -230,7 +230,7 @@ enum Biomes {
 }
 
 enum Levels {
-    static let all: [LevelData] = [level1, chase, level2, rooftops, lab, sewers, harbor, level3, fortress]
+    static let all: [LevelData] = [level1, chase, level2, rooftops, lab, sewers, gauntlet, harbor, powerplant, level3, fortress]
 
     static let level1 = LevelData(
         index: 1,
@@ -348,7 +348,7 @@ enum Levels {
         exitLabel: "FERRY")
 
     static let level3 = LevelData(
-        index: 8,
+        index: 10,
         name: "Static Tower",
         subtitle: "Climb his tower — but Chow-Chow slips away to his fortress!",
         biome: Biomes.tower,
@@ -486,7 +486,7 @@ enum Levels {
         dronesStyle: true)
 
     static let harbor = LevelData(
-        index: 7,
+        index: 8,
         name: "Harbor Boat Chase",
         subtitle: "He's switched to a speedboat — give chase across the bay!",
         biome: Biomes.harbor,
@@ -510,7 +510,7 @@ enum Levels {
         isBoat: true)
 
     static let fortress = LevelData(
-        index: 9,
+        index: 11,
         name: "Chow-Chow's Fortress",
         subtitle: "The final battle. Power up and end this!",
         biome: Biomes.fortress,
@@ -540,4 +540,86 @@ enum Levels {
                     CGPoint(x: 1500, y: 1300)],
         starSpots: [CGPoint(x: 1300, y: 1450)],
         bossPhases: 3)
+
+    // MARK: Big complex scenarios
+
+    static let gauntlet = LevelData(
+        index: 7,
+        name: "Downtown Gauntlet",
+        subtitle: "A sprawling night-city run: lasers, drones, searchlights — find the keycard!",
+        biome: Biomes.rooftops,
+        worldSize: CGSize(width: 3400, height: 2400),
+        heroSpawn: CGPoint(x: 300, y: 1200),
+        corePos: nil,
+        exitPos: CGPoint(x: 3120, y: 1200),
+        crystalsRequired: 7,
+        crystalSpots: [CGPoint(x: 900, y: 700), CGPoint(x: 1300, y: 1700), CGPoint(x: 1700, y: 600),
+                       CGPoint(x: 1900, y: 1900), CGPoint(x: 2300, y: 900), CGPoint(x: 2600, y: 1700),
+                       CGPoint(x: 2900, y: 600), CGPoint(x: 1500, y: 1100)],
+        minionPatrols: [[CGPoint(x: 1000, y: 500), CGPoint(x: 1000, y: 1900)],
+                        [CGPoint(x: 1400, y: 900), CGPoint(x: 2000, y: 900)],
+                        [CGPoint(x: 1800, y: 1400), CGPoint(x: 1800, y: 2000)],
+                        [CGPoint(x: 2200, y: 600), CGPoint(x: 2800, y: 600)],
+                        [CGPoint(x: 2500, y: 1300), CGPoint(x: 2500, y: 1900)],
+                        [CGPoint(x: 2900, y: 900), CGPoint(x: 2900, y: 1700)]],
+        minionSpeed: 120, minionRange: 170,
+        coverSpots: [CGPoint(x: 950, y: 950), CGPoint(x: 1350, y: 1300), CGPoint(x: 1700, y: 900),
+                     CGPoint(x: 2050, y: 1500), CGPoint(x: 2350, y: 1150), CGPoint(x: 2650, y: 1400),
+                     CGPoint(x: 1550, y: 1850), CGPoint(x: 2850, y: 1000), CGPoint(x: 1200, y: 600)],
+        treeSpots: [],
+        buildings: [BuildingSpec(pos: CGPoint(x: 300, y: 1480), size: CGSize(width: 220, height: 170),
+                                 roof: SKColor(red: 0.30, green: 0.85, blue: 0.95, alpha: 1), label: "START")],
+        signs: [("🏙 DOWNTOWN", CGPoint(x: 700, y: 1500)), ("DANGER ZONE", CGPoint(x: 2600, y: 2100))],
+        npcs: [],
+        hasBoss: false,
+        objective: "Recover 7 Crystals + keycard, reach the EXIT",
+        exitLabel: "EXIT",
+        coinSpots: [CGPoint(x: 1100, y: 1500), CGPoint(x: 1600, y: 800), CGPoint(x: 2100, y: 1100),
+                    CGPoint(x: 2400, y: 1700), CGPoint(x: 2750, y: 800), CGPoint(x: 1900, y: 1300),
+                    CGPoint(x: 1350, y: 600), CGPoint(x: 3000, y: 1400)],
+        searchlights: [CGPoint(x: 1500, y: 1500), CGPoint(x: 2100, y: 700), CGPoint(x: 2700, y: 1300),
+                       CGPoint(x: 1900, y: 1000)],
+        laserGates: [CGPoint(x: 1600, y: 1200), CGPoint(x: 2200, y: 1500), CGPoint(x: 2800, y: 1000)],
+        speedPads: [CGPoint(x: 800, y: 1200), CGPoint(x: 2000, y: 1700)],
+        waterRects: [CGRect(x: 1250, y: 850, width: 320, height: 240)],
+        keycardPos: CGPoint(x: 2950, y: 1950),
+        dronesStyle: true)
+
+    static let powerplant = LevelData(
+        index: 9,
+        name: "The Power Plant",
+        subtitle: "Chow-Chow's reactor — a massive laser grid guards 8 crystals.",
+        biome: Biomes.tower,
+        worldSize: CGSize(width: 3200, height: 2400),
+        heroSpawn: CGPoint(x: 300, y: 1200),
+        corePos: nil,
+        exitPos: CGPoint(x: 2950, y: 1200),
+        crystalsRequired: 8,
+        crystalSpots: [CGPoint(x: 850, y: 700), CGPoint(x: 1200, y: 1700), CGPoint(x: 1600, y: 650),
+                       CGPoint(x: 1600, y: 1750), CGPoint(x: 2000, y: 1100), CGPoint(x: 2300, y: 700),
+                       CGPoint(x: 2300, y: 1700), CGPoint(x: 2650, y: 1100), CGPoint(x: 1000, y: 1150)],
+        minionPatrols: [[CGPoint(x: 900, y: 500), CGPoint(x: 900, y: 1900)],
+                        [CGPoint(x: 1400, y: 1000), CGPoint(x: 1900, y: 1000)],
+                        [CGPoint(x: 1700, y: 1400), CGPoint(x: 1700, y: 2000)],
+                        [CGPoint(x: 2100, y: 600), CGPoint(x: 2100, y: 1500)],
+                        [CGPoint(x: 2500, y: 900), CGPoint(x: 2900, y: 900)],
+                        [CGPoint(x: 2600, y: 1500), CGPoint(x: 2600, y: 2000)]],
+        minionSpeed: 115, minionRange: 180,
+        coverSpots: [CGPoint(x: 900, y: 950), CGPoint(x: 1300, y: 1300), CGPoint(x: 1650, y: 1000),
+                     CGPoint(x: 2000, y: 1450), CGPoint(x: 2350, y: 1100), CGPoint(x: 2650, y: 1450),
+                     CGPoint(x: 1500, y: 1850), CGPoint(x: 2800, y: 950), CGPoint(x: 1150, y: 650)],
+        treeSpots: [],
+        buildings: [BuildingSpec(pos: CGPoint(x: 300, y: 1480), size: CGSize(width: 220, height: 170),
+                                 roof: SKColor(red: 0.30, green: 0.95, blue: 1.0, alpha: 1), label: "ENTRY")],
+        signs: [("⚛ POWER PLANT", CGPoint(x: 700, y: 1500)), ("HIGH VOLTAGE", CGPoint(x: 2400, y: 2100))],
+        npcs: [],
+        hasBoss: false,
+        objective: "Shut down the reactor: grab 8 Crystals",
+        exitLabel: "CORE",
+        coinSpots: [CGPoint(x: 1100, y: 900), CGPoint(x: 1500, y: 1500), CGPoint(x: 1900, y: 700),
+                    CGPoint(x: 2200, y: 1400), CGPoint(x: 2500, y: 800), CGPoint(x: 2750, y: 1600)],
+        laserGates: [CGPoint(x: 1300, y: 900), CGPoint(x: 1300, y: 1500), CGPoint(x: 1900, y: 1200),
+                     CGPoint(x: 2300, y: 900), CGPoint(x: 2300, y: 1500), CGPoint(x: 2700, y: 1200)],
+        magnetSpots: [CGPoint(x: 1000, y: 1700)],
+        starSpots: [CGPoint(x: 2300, y: 1150)])
 }
