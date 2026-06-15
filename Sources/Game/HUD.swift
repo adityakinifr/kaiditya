@@ -240,6 +240,8 @@ final class HUD: SKNode {
 
     func updateCrystals(_ n: Int) { crystalLabel.text = "\(n)" }
 
+    func setCrystalsHidden(_ hidden: Bool) { crystalIcon.isHidden = hidden; crystalLabel.isHidden = hidden }
+
     func updateCoins(_ n: Int) {
         coinLabel.text = "\(n)"
         coinIcon.isHidden = n == 0

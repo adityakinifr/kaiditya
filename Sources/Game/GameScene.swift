@@ -73,6 +73,7 @@ final class GameScene: SKScene {
     private var shopDoor: CGPoint?
     private var arcadeDoor: CGPoint?
     private var missionsPortal: SKNode?
+    private var shopFromHub = false
     // Hub side-quest (Tommy's Coin Rush)
     private var questActive = false
     private var questDone = false
@@ -325,7 +326,7 @@ final class GameScene: SKScene {
 
         hud.updateObjective(level: "Level \(level.index) · \(level.name)",
                             title: level.objective, hint: objectiveHint(), progress: progressText())
-        hud.updateCrystals(0)
+        hud.updateCrystals(0); hud.setCrystalsHidden(false)
         hud.updateCoins(Economy.coins)
         hud.updateEnergy(1)
         hud.hideBossBar()
@@ -1145,10 +1146,15 @@ final class GameScene: SKScene {
         cam.addChild(overlay); positionOverlay(overlay)
     }
 
+    private func exitShop() {
+        cam.childNode(withName: "shopOverlay")?.removeFromParent()
+        if shopFromHub { shopFromHub = false; enterHub() } else { showMap() }
+    }
+
     private func handleShopTap(_ camP: CGPoint) {
         guard let overlay = cam.childNode(withName: "shopOverlay") else { return }
         if let back = overlay.childNode(withName: "shopBack"), back.contains(camP) {
-            overlay.removeFromParent(); showMap(); return
+            exitShop(); return
         }
         for u in Upgrade.allCases {
             if let row = overlay.childNode(withName: "shoprow_\(u.rawValue)"), row.contains(camP) {
@@ -1169,7 +1175,7 @@ final class GameScene: SKScene {
 
     private func handleMapTap(_ camP: CGPoint) {
         if let shop = cam.childNode(withName: "//shopButton"), shop.contains(cam.convert(camP, to: shop.parent!)) {
-            cam.childNode(withName: "mapOverlay")?.removeFromParent(); showShop(); return
+            cam.childNode(withName: "mapOverlay")?.removeFromParent(); shopFromHub = false; showShop(); return
         }
         if let home = cam.childNode(withName: "//homeButton"), home.contains(cam.convert(camP, to: home.parent!)) {
             cam.childNode(withName: "mapOverlay")?.removeFromParent(); enterHub(); return
@@ -1509,7 +1515,7 @@ final class GameScene: SKScene {
         switch state {
         case .title: startGame(); return
         case .map: cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)); return
-        case .shop: cam.childNode(withName: "shopOverlay")?.removeFromParent(); showMap(); return
+        case .shop: exitShop(); return
         case .intro: dismissIntro(); return
         case .tour: advanceTour(); return
         case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
@@ -1600,7 +1606,8 @@ final class GameScene: SKScene {
         cam.position = clampedCamera(player.position)
         hud.updateObjective(level: "HERO CITY", title: "Welcome home, hero!",
                             hint: "Enter a glowing portal for missions · visit the SHOP & ARCADE", progress: "")
-        hud.updateCrystals(0); hud.updateCoins(Economy.coins); hud.updateEnergy(1); hud.hideBossBar()
+        hud.updateCrystals(0); hud.setCrystalsHidden(true)
+        hud.updateCoins(Economy.coins); hud.updateEnergy(1); hud.hideBossBar()
         setControlsHidden(false); applyControlMode()
         refreshQuestMarkers()
         state = .playing
@@ -1661,6 +1668,7 @@ final class GameScene: SKScene {
 
     /// Gentle day↔night tint cycle in the hub.
     private func startDayNight() {
+        cam.childNode(withName: "dayNight")?.removeFromParent()
         let overlay = SKSpriteNode(color: SKColor(red: 0.1, green: 0.1, blue: 0.35, alpha: 1),
                                    size: CGSize(width: 4000, height: 4000))
         overlay.zPosition = ZLayer.fx + 1; overlay.alpha = 0; overlay.name = "dayNight"
@@ -2040,6 +2048,7 @@ final class GameScene: SKScene {
     private func openShopFromHub() {
         cam.childNode(withName: "dayNight")?.removeFromParent()
         inHub = false
+        shopFromHub = true
         showShop()
     }
 
@@ -2476,7 +2485,7 @@ final class GameScene: SKScene {
         switch state {
         case .title: if tap(0.5) { startGame() }; return
         case .map: if tap(1.0) { cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)) }; return
-        case .shop: if tap(1.0) { cam.childNode(withName: "shopOverlay")?.removeFromParent(); showMap() }; return
+        case .shop: if tap(1.0) { exitShop() }; return
         case .intro: if tap(1.2) { dismissIntro() }; return
         case .tour: if tap(1.0) { advanceTour() }; return
         case .complete: if tap(1.5) { cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1) }; return
