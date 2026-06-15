@@ -146,6 +146,7 @@ final class GameScene: SKScene {
 
     private let controlPanel = SKNode()
     private var moveHint: SKNode?
+    private let objectiveArrow = SKNode()
 
     private func setupControls() {
         cam.addChild(joystick)
@@ -185,6 +186,23 @@ final class GameScene: SKScene {
         hint.run(.repeatForever(.sequence([.fadeAlpha(to: 0.5, duration: 0.8), .fadeAlpha(to: 1, duration: 0.8)])))
         cam.addChild(hint); moveHint = hint
 
+        // Objective direction arrow (points to keycard / exit / crystals).
+        let tri = SKShapeNode(path: {
+            let p = CGMutablePath(); p.move(to: CGPoint(x: 16, y: 0))
+            p.addLine(to: CGPoint(x: -10, y: -11)); p.addLine(to: CGPoint(x: -10, y: 11)); p.closeSubpath(); return p
+        }())
+        tri.name = "tri"; tri.fillColor = Palette.energy; tri.strokeColor = .white; tri.lineWidth = 1.5; tri.glowWidth = 2
+        objectiveArrow.addChild(tri)
+        let arrowLbl = SKLabelNode(text: ""); arrowLbl.name = "lbl"
+        arrowLbl.fontName = "AvenirNext-Heavy"; arrowLbl.fontSize = 11; arrowLbl.fontColor = .white
+        arrowLbl.verticalAlignmentMode = .center; arrowLbl.horizontalAlignmentMode = .center
+        let arrowPlate = roundedRect(size: CGSize(width: 72, height: 18), corner: 9, color: SKColor(white: 0, alpha: 0.6))
+        arrowPlate.name = "plate"; arrowPlate.position = CGPoint(x: 0, y: -24); arrowPlate.addChild(arrowLbl)
+        objectiveArrow.addChild(arrowPlate)
+        objectiveArrow.zPosition = ZLayer.hud + 2
+        objectiveArrow.isHidden = true
+        cam.addChild(objectiveArrow)
+
         cam.addChild(hud)
     }
 
@@ -220,6 +238,7 @@ final class GameScene: SKScene {
         shieldBtn.isHidden = hidden
         disguiseBtn.isHidden = hidden
         grappleBtn?.isHidden = true   // contextual; shown by updateGrappleTarget
+        objectiveArrow.isHidden = true   // contextual; shown by updateObjectiveArrow
         controlPanel.isHidden = hidden
         moveHint?.isHidden = hidden || hasMoved
     }
@@ -1434,6 +1453,7 @@ final class GameScene: SKScene {
             updateMechanics(dt: dt)
             updateBossProjectiles()
             updateGrappleTarget()
+            updateObjectiveArrow()
             updateObjectiveProximity()
             updateInteractTarget()
         }
@@ -1476,6 +1496,39 @@ final class GameScene: SKScene {
         let ny = max(30, min(worldSize.height - 30, player.position.y + v.dy * spd * CGFloat(dt)))
         player.position = CGPoint(x: nx, y: ny)
         player.faceMovement(v)
+    }
+
+    // MARK: - Objective arrow
+
+    private func nearestCrystal() -> SKShapeNode? {
+        crystalNodes.filter { $0.parent != nil }
+            .min { $0.position.distance(to: player.position) < $1.position.distance(to: player.position) }
+    }
+
+    private func updateObjectiveArrow() {
+        if level.isDriving { objectiveArrow.isHidden = true; return }
+        var target: CGPoint?; var text = ""; var color = biome.accent
+        if level.keycardPos != nil, !hasKeycard, let k = keycardNode, k.parent != nil {
+            target = k.position; text = "KEY"; color = Palette.energy
+        } else {
+            switch objective {
+            case .collect: if let c = nearestCrystal() { target = c.position; text = "CRYSTAL"; color = Palette.crystal }
+            case .charge:  target = powerCore?.position; text = "CORE"; color = biome.accent
+            case .reachExit: target = exitPortal?.position; text = level.exitLabel; color = biome.accent
+            case .boss:    target = villain?.position; text = "FIGHT"; color = Palette.heroRed
+            case .done:    break
+            }
+        }
+        guard let t = target else { objectiveArrow.isHidden = true; return }
+        let dx = t.x - player.position.x, dy = t.y - player.position.y
+        let dist = hypot(dx, dy)
+        if dist < 210 { objectiveArrow.isHidden = true; return }   // close enough to see it
+        objectiveArrow.isHidden = false
+        let ang = atan2(dy, dx)
+        let r = min(size.width, size.height) * 0.30
+        objectiveArrow.position = CGPoint(x: cos(ang) * r, y: sin(ang) * r * 0.78 + size.height * 0.04)
+        (objectiveArrow.childNode(withName: "tri") as? SKShapeNode).map { $0.zRotation = ang; $0.fillColor = color }
+        (objectiveArrow.childNode(withName: "//lbl") as? SKLabelNode)?.text = "\(text)  \(Int(dist/10))m"
     }
 
     // MARK: - Grapple

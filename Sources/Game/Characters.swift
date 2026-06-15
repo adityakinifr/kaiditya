@@ -388,6 +388,11 @@ enum CharacterFactory {
         let hook = SKShapeNode(circleOfRadius: 5)
         hook.strokeColor = .white; hook.lineWidth = 2; hook.fillColor = .clear
         node.addChild(hook)
+        let tag = SKLabelNode(text: "ZIP")
+        tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 9; tag.fontColor = accent
+        tag.verticalAlignmentMode = .center; tag.position = CGPoint(x: 0, y: 22)
+        tag.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
+        node.addChild(tag)
         node.name = "anchor"
         return node
     }
