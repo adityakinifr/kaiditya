@@ -85,7 +85,7 @@ final class GameScene: SKScene {
     private var bossHits = 0
 
     // Flow
-    private enum State { case title, map, intro, tour, playing, dialogue, complete, won }
+    private enum State { case title, map, shop, intro, tour, playing, dialogue, complete, won }
     private var tourStep = 0
     private var state: State = .title
     private var lastUpdate: TimeInterval = 0
@@ -115,6 +115,9 @@ final class GameScene: SKScene {
         layoutHUD()
         showTitle()
 
+        if ProcessInfo.processInfo.environment["KAIDITYA_SHOP"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.showShop() }
+        }
         DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self else { return }
@@ -291,7 +294,7 @@ final class GameScene: SKScene {
         hud.updateObjective(level: "Level \(level.index) · \(level.name)",
                             title: level.objective, hint: objectiveHint(), progress: progressText())
         hud.updateCrystals(0)
-        hud.updateCoins(0)
+        hud.updateCoins(Economy.coins)
         hud.updateEnergy(1)
         hud.hideBossBar()
         refreshQuestMarkers()
@@ -430,7 +433,8 @@ final class GameScene: SKScene {
 
         let pp = player.position
         for c in coinNodes where c.parent != nil && c.position.distance(to: pp) < 38 {
-            c.removeFromParent(); coins += 1; hud.updateCoins(coins); blip(c.position, "★", Palette.energy); SoundFX.shared.play("coin")
+            c.removeFromParent(); coins += 1; Economy.addCoins(1); hud.updateCoins(Economy.coins)
+            blip(c.position, "★", Palette.energy); SoundFX.shared.play("coin")
         }
         if let k = keycardNode, k.parent != nil, k.position.distance(to: pp) < 42 {
             k.removeFromParent(); hasKeycard = true
@@ -1018,13 +1022,81 @@ final class GameScene: SKScene {
         }
         let hint = SKLabelNode(text: "tap a zone to play")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
-        hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 36); overlay.addChild(hint)
+        hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 70); overlay.addChild(hint)
+
+        // SHOP button
+        let shop = roundedRect(size: CGSize(width: 180, height: 44), corner: 14, color: Palette.energy.darker)
+        shop.strokeColor = .white; shop.lineWidth = 2; shop.name = "shopButton"
+        shop.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 30)
+        let shopLbl = SKLabelNode(text: "🛒  SHOP  ·  \(Economy.coins)★")
+        shopLbl.fontName = "AvenirNext-Heavy"; shopLbl.fontSize = 16; shopLbl.fontColor = .white
+        shopLbl.verticalAlignmentMode = .center; shop.addChild(shopLbl)
+        overlay.addChild(shop)
 
         cam.addChild(overlay)
         positionOverlay(overlay)
     }
 
+    private func showShop() {
+        state = .shop
+        ["shopOverlay", "titleOverlay", "mapOverlay"].forEach { cam.childNode(withName: $0)?.removeFromParent() }
+        let overlay = SKNode(); overlay.name = "shopOverlay"; overlay.zPosition = ZLayer.overlay
+        let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        overlay.addChild(bg)
+        let title = SKLabelNode(text: "GADGET SHOP")
+        title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
+        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
+        let purse = SKLabelNode(text: "Coins: \(Economy.coins) ★")
+        purse.fontName = "AvenirNext-Bold"; purse.fontSize = 17; purse.fontColor = .white
+        purse.position = CGPoint(x: 0, y: size.height/2 - safeTop - 96); overlay.addChild(purse)
+
+        let rowW = min(size.width - 40, 460), rowH: CGFloat = 78
+        var y = size.height * 0.18
+        for u in Upgrade.allCases {
+            let owned = Economy.owned(u)
+            let afford = Economy.coins >= u.price
+            let row = roundedRect(size: CGSize(width: rowW, height: rowH), corner: 14, color: Palette.hudPanel)
+            row.strokeColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.4, alpha: 1))
+            row.lineWidth = 2; row.position = CGPoint(x: 0, y: y); row.name = "shoprow_\(u.rawValue)"
+            let g = SKLabelNode(text: u.glyph); g.fontSize = 30; g.verticalAlignmentMode = .center
+            g.position = CGPoint(x: -rowW/2 + 34, y: 0); row.addChild(g)
+            let t = SKLabelNode(text: u.title); t.fontName = "AvenirNext-Heavy"; t.fontSize = 17; t.fontColor = .white
+            t.horizontalAlignmentMode = .left; t.position = CGPoint(x: -rowW/2 + 62, y: 12); row.addChild(t)
+            let d = SKLabelNode(text: u.desc); d.fontName = "AvenirNext-Regular"; d.fontSize = 12; d.fontColor = SKColor(white: 0.8, alpha: 1)
+            d.horizontalAlignmentMode = .left; d.position = CGPoint(x: -rowW/2 + 62, y: -12); row.addChild(d)
+            let price = SKLabelNode(text: owned ? "OWNED ✓" : "\(u.price) ★")
+            price.fontName = "AvenirNext-Heavy"; price.fontSize = 16
+            price.fontColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.55, alpha: 1))
+            price.horizontalAlignmentMode = .right; price.position = CGPoint(x: rowW/2 - 20, y: 0); row.addChild(price)
+            overlay.addChild(row)
+            y -= rowH + 12
+        }
+        let back = roundedRect(size: CGSize(width: 160, height: 44), corner: 14, color: Palette.heroBlue)
+        back.strokeColor = .white; back.lineWidth = 2; back.name = "shopBack"
+        back.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 34)
+        let bl = SKLabelNode(text: "◂ BACK"); bl.fontName = "AvenirNext-Heavy"; bl.fontSize = 16; bl.fontColor = .white
+        bl.verticalAlignmentMode = .center; back.addChild(bl); overlay.addChild(back)
+        cam.addChild(overlay); positionOverlay(overlay)
+    }
+
+    private func handleShopTap(_ camP: CGPoint) {
+        guard let overlay = cam.childNode(withName: "shopOverlay") else { return }
+        if let back = overlay.childNode(withName: "shopBack"), back.contains(camP) {
+            overlay.removeFromParent(); showMap(); return
+        }
+        for u in Upgrade.allCases {
+            if let row = overlay.childNode(withName: "shoprow_\(u.rawValue)"), row.contains(camP) {
+                if Economy.buy(u) { SoundFX.shared.play("powerup"); showShop() }   // refresh
+                else { SoundFX.shared.play("caught") }
+                return
+            }
+        }
+    }
+
     private func handleMapTap(_ camP: CGPoint) {
+        if let shop = cam.childNode(withName: "//shopButton"), shop.contains(cam.convert(camP, to: shop.parent!)) {
+            cam.childNode(withName: "mapOverlay")?.removeFromParent(); showShop(); return
+        }
         for i in 0..<Levels.all.count where i <= maxUnlocked {
             if let node = cam.childNode(withName: "//mapnode_\(i)"),
                node.contains(cam.convert(camP, to: node.parent!)) {
@@ -1297,6 +1369,7 @@ final class GameScene: SKScene {
             switch state {
             case .title:    startGame(); return
             case .map:      handleMapTap(camP); return
+            case .shop:     handleShopTap(camP); return
             case .intro:    dismissIntro(); return
             case .tour:     advanceTour(); return
             case .dialogue: advanceDialogue(); return
@@ -1356,6 +1429,7 @@ final class GameScene: SKScene {
         switch state {
         case .title: startGame(); return
         case .map: cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)); return
+        case .shop: cam.childNode(withName: "shopOverlay")?.removeFromParent(); showMap(); return
         case .intro: dismissIntro(); return
         case .tour: advanceTour(); return
         case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
@@ -2006,6 +2080,7 @@ final class GameScene: SKScene {
         switch state {
         case .title: if tap(0.5) { startGame() }; return
         case .map: if tap(1.0) { cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)) }; return
+        case .shop: if tap(1.0) { cam.childNode(withName: "shopOverlay")?.removeFromParent(); showMap() }; return
         case .intro: if tap(1.2) { dismissIntro() }; return
         case .tour: if tap(1.0) { advanceTour() }; return
         case .complete: if tap(1.5) { cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1) }; return

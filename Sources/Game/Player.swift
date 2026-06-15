@@ -10,8 +10,9 @@ final class Player: SKNode {
 
     var maxEnergy: CGFloat = 100
     var energy: CGFloat = 100
-    let walkSpeed: CGFloat = 200
-    let dashSpeed: CGFloat = 560
+    var walkSpeed: CGFloat = 200
+    var dashSpeed: CGFloat = 560
+    var shieldDuration: TimeInterval = 4.0
 
     private(set) var isShielded = false
     private(set) var isDashing = false
@@ -93,7 +94,7 @@ final class Player: SKNode {
         guard energy >= 35, !isShielded else { return false }
         energy -= 35
         isShielded = true
-        shieldTimer = 4.0
+        shieldTimer = shieldDuration
         shieldBubble.isHidden = false
         shieldBubble.setScale(0.3)
         shieldBubble.run(.scale(to: 1.0, duration: 0.2))
@@ -187,8 +188,17 @@ final class Player: SKNode {
         }
     }
 
+    /// Apply purchased shop upgrades to the hero's stats.
+    func applyUpgrades() {
+        walkSpeed = Economy.owned(.boots) ? 250 : 200
+        dashSpeed = Economy.owned(.dash) ? 700 : 560
+        maxEnergy = Economy.owned(.energy) ? 135 : 100
+        shieldDuration = Economy.owned(.shield) ? 6.5 : 4.0
+    }
+
     /// Reset hero state at the start of a level.
     func resetForLevel() {
+        applyUpgrades()
         energy = maxEnergy
         isShielded = false
         isDashing = false
