@@ -2074,9 +2074,12 @@ final class GameScene: SKScene {
         let timer = SKLabelNode(text: "30s"); timer.name = "mgTimer"; timer.fontName = "AvenirNext-Heavy"; timer.fontSize = 20
         timer.fontColor = .white; timer.horizontalAlignmentMode = .right
         timer.position = CGPoint(x: size.width/2 - 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(timer)
+        let best = SKLabelNode(text: "BEST  \(Economy.bestCatch) ★")
+        best.fontName = "AvenirNext-Bold"; best.fontSize = 13; best.fontColor = Palette.crystal
+        best.position = CGPoint(x: 0, y: size.height/2 - safeTop - 70); mgLayer.addChild(best)
         let hint = SKLabelNode(text: "Drag / arrows to catch the crystals!")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
-        hint.position = CGPoint(x: 0, y: size.height/2 - safeTop - 72); mgLayer.addChild(hint)
+        hint.position = CGPoint(x: 0, y: size.height/2 - safeTop - 92); mgLayer.addChild(hint)
 
         // Basket catcher near the bottom.
         let catcher = SKNode()
@@ -2133,18 +2136,23 @@ final class GameScene: SKScene {
 
     private func endMinigame() {
         mgOver = true
-        Economy.addCoins(mgScore)
+        let newBest = Economy.recordCatch(mgScore)
+        let bonus = newBest ? 5 : 0
+        Economy.addCoins(mgScore + bonus)
         SoundFX.shared.play("clear")
-        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 200), corner: 20, color: Palette.hudPanel)
+        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 220), corner: 20, color: Palette.hudPanel)
         card.strokeColor = Palette.energy; card.lineWidth = 3; card.zPosition = 10; mgLayer.addChild(card)
-        let t = SKLabelNode(text: "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"; t.fontSize = 28; t.fontColor = Palette.energy
-        t.position = CGPoint(x: 0, y: 56); card.addChild(t)
+        let t = SKLabelNode(text: newBest ? "NEW BEST! 🎉" : "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"
+        t.fontSize = 26; t.fontColor = Palette.energy; t.position = CGPoint(x: 0, y: 70); card.addChild(t)
         let r = SKLabelNode(text: "Caught \(mgScore) crystals"); r.fontName = "AvenirNext-Bold"; r.fontSize = 17; r.fontColor = .white
-        r.position = CGPoint(x: 0, y: 14); card.addChild(r)
-        let c = SKLabelNode(text: "+\(mgScore) ★  coins"); c.fontName = "AvenirNext-Heavy"; c.fontSize = 18; c.fontColor = Palette.crystal
-        c.position = CGPoint(x: 0, y: -18); card.addChild(c)
+        r.position = CGPoint(x: 0, y: 30); card.addChild(r)
+        let bestL = SKLabelNode(text: "Best: \(Economy.bestCatch)"); bestL.fontName = "AvenirNext-Medium"; bestL.fontSize = 14
+        bestL.fontColor = Palette.crystal; bestL.position = CGPoint(x: 0, y: 4); card.addChild(bestL)
+        let c = SKLabelNode(text: newBest ? "+\(mgScore) ★  +5 bonus!" : "+\(mgScore) ★  coins")
+        c.fontName = "AvenirNext-Heavy"; c.fontSize = 18; c.fontColor = Palette.crystal
+        c.position = CGPoint(x: 0, y: -24); card.addChild(c)
         let go = SKLabelNode(text: "tap to continue ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
-        go.position = CGPoint(x: 0, y: -62); card.addChild(go)
+        go.position = CGPoint(x: 0, y: -68); card.addChild(go)
         dramatize(card, in: mgLayer, accent: Palette.energy, rays: false)
     }
 

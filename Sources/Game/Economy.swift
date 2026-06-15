@@ -112,6 +112,17 @@ enum Economy {
     }
     static func equip(_ c: Costume) { UserDefaults.standard.set(c.rawValue, forKey: "kaiditya.costume") }
 
+    // MARK: Arcade high score
+
+    static var bestCatch: Int { UserDefaults.standard.integer(forKey: "kaiditya.mgBest") }
+
+    /// Record a Crystal-Catch score; returns true if it's a new best.
+    static func recordCatch(_ score: Int) -> Bool {
+        guard score > bestCatch else { return false }
+        UserDefaults.standard.set(score, forKey: "kaiditya.mgBest")
+        return true
+    }
+
     /// Buy (and auto-equip) a costume, or just equip if already owned.
     @discardableResult
     static func selectCostume(_ c: Costume) -> Bool {
