@@ -256,11 +256,16 @@ enum Levels {
         npcs: [
             NPCSpec(id: "mayor", name: "Mayor Mia", pos: CGPoint(x: 700, y: 700), tint: Palette.heroRed),
             NPCSpec(id: "gran", name: "Granny Gold", pos: CGPoint(x: 1250, y: 760),
-                    tint: SKColor(red: 0.8, green: 0.6, blue: 0.85, alpha: 1))
+                    tint: SKColor(red: 0.8, green: 0.6, blue: 0.85, alpha: 1)),
+            NPCSpec(id: "tommy", name: "Tommy", pos: CGPoint(x: 950, y: 1000),
+                    tint: SKColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1))
         ],
         hasBoss: false,
         objective: "",
         exitLabel: "MISSIONS",
+        coinSpots: [CGPoint(x: 400, y: 600), CGPoint(x: 1500, y: 620), CGPoint(x: 350, y: 950),
+                    CGPoint(x: 1550, y: 980), CGPoint(x: 700, y: 1050), CGPoint(x: 1200, y: 1080),
+                    CGPoint(x: 600, y: 450), CGPoint(x: 1300, y: 470)],
         isHub: true)
 
     static let level1 = LevelData(

@@ -73,6 +73,11 @@ final class GameScene: SKScene {
     private var shopDoor: CGPoint?
     private var arcadeDoor: CGPoint?
     private var missionsPortal: SKNode?
+    // Hub side-quest (Tommy's Coin Rush)
+    private var questActive = false
+    private var questDone = false
+    private var questTarget = 5
+    private var questProgress = 0
 
     // Minigame (Crystal Catch)
     private let mgLayer = SKNode()
@@ -1547,6 +1552,7 @@ final class GameScene: SKScene {
         exitPortal = nil; powerCore = nil; villain = nil
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         shopDoor = nil; arcadeDoor = nil; missionsPortal = nil
+        coinNodes = []; questActive = false; questDone = false; questProgress = 0
         objective = .done
         player.removeFromParent(); player.resetForLevel()
         player.position = level.heroSpawn
@@ -1581,6 +1587,20 @@ final class GameScene: SKScene {
         addHubBuilding(label: "ARCADE", at: CGPoint(x: 1380, y: 1180), roof: Palette.heroRed, door: arcade)
         arcadeDoor = arcade
         for n in level.npcs { addNPCSpec(n) }
+        // Wandering townsfolk for life.
+        for npc in npcs where npc.id != "tommy" {
+            let dx = CGFloat([60, -70, 80].randomishPick(npc.position.x))
+            npc.run(.repeatForever(.sequence([
+                .moveBy(x: dx, y: 0, duration: 2.2), .wait(forDuration: 0.6),
+                .moveBy(x: -dx, y: 0, duration: 2.2), .wait(forDuration: 0.6)
+            ])))
+        }
+        // Coins scattered around town.
+        for p in level.coinSpots {
+            let c = CharacterFactory.makeCoin(); c.position = p; c.zPosition = ZLayer.items
+            c.run(.repeatForever(.sequence([.scaleX(to: 0.3, duration: 0.4), .scaleX(to: 1, duration: 0.4)])))
+            worldNode.addChild(c); coinNodes.append(c)
+        }
         // Missions portal.
         let portal = Effects.portal(accent: biome.accent, label: "MISSIONS")
         portal.position = level.exitPos; portal.zPosition = ZLayer.items
@@ -1915,6 +1935,12 @@ final class GameScene: SKScene {
 
     private func updateHubInteract() {
         let pp = player.position
+        // Collect coins scattered around town.
+        for c in coinNodes where c.parent != nil && c.position.distance(to: pp) < 38 {
+            c.removeFromParent(); Economy.addCoins(1); hud.updateCoins(Economy.coins)
+            blip(c.position, "★", Palette.energy); SoundFX.shared.play("coin")
+            if questActive { questProgress += 1; updateQuestHUD() }
+        }
         // Walk into the missions portal → zone map.
         if let portal = missionsPortal, portal.position.distance(to: pp) < 50 {
             inHub = false
@@ -1934,6 +1960,47 @@ final class GameScene: SKScene {
         }
         interactBtn.setTitle(label)
         interactBtn.setEnabled(enabled)
+    }
+
+    private func updateQuestHUD() {
+        refreshQuestMarkers()
+        if questActive {
+            hud.updateObjective(level: "SIDE-QUEST", title: "Tommy's Coin Rush",
+                                hint: "Collect coins around town, then tell Tommy",
+                                progress: "\(min(questProgress, questTarget))/\(questTarget)")
+        } else {
+            hud.updateObjective(level: "HERO CITY", title: "Welcome home, hero!",
+                                hint: "Enter a glowing portal for missions · visit the SHOP & ARCADE", progress: "")
+        }
+    }
+
+    private func talkTommy() {
+        if questDone {
+            showDialogue(speaker: "Tommy", lines: ["Thanks again, Kaiditya! You're the best."]); return
+        }
+        if !questActive {
+            showDialogue(speaker: "Tommy", lines: [
+                "Hi Kaiditya! I dropped my \(questTarget) lucky coins all over town.",
+                "Could you find them for me? I'll give you a reward!"
+            ]) { [weak self] in
+                guard let self else { return }
+                self.questActive = true; self.questProgress = 0; self.updateQuestHUD()
+                self.hud.showToast("Quest started: find \(self.questTarget) coins!", color: Palette.energy)
+            }
+        } else if questProgress >= questTarget {
+            showDialogue(speaker: "Tommy", lines: [
+                "You found them all! Wow, thank you!",
+                "Here's a reward — 15 bonus coins! ★"
+            ]) { [weak self] in
+                guard let self else { return }
+                Economy.addCoins(15); self.hud.updateCoins(Economy.coins)
+                self.questActive = false; self.questDone = true; self.updateQuestHUD()
+                SoundFX.shared.play("powerup")
+                self.hud.showToast("+15 coins! Quest complete 🎉", color: Palette.crystal)
+            }
+        } else {
+            showDialogue(speaker: "Tommy", lines: ["Found \(questProgress) of \(questTarget) so far — keep looking!"])
+        }
     }
 
     private func openShopFromHub() {
@@ -2051,6 +2118,8 @@ final class GameScene: SKScene {
     private func talkTo(_ npc: NPC) {
         if inHub {
             switch npc.id {
+            case "tommy":
+                talkTommy()
             case "mayor":
                 showDialogue(speaker: "Mayor Mia", lines: [
                     "Welcome to Hero City, Kaiditya!",
@@ -2353,7 +2422,13 @@ final class GameScene: SKScene {
     }
 
     private func refreshQuestMarkers() {
-        for npc in npcs { npc.setQuestMarker(npc.id == "mayor" && levelIndex == 0) }
+        for npc in npcs {
+            if inHub {
+                npc.setQuestMarker(npc.id == "tommy" && (!questActive && !questDone || questActive && questProgress >= questTarget))
+            } else {
+                npc.setQuestMarker(npc.id == "mayor" && levelIndex == 0)
+            }
+        }
     }
 
     // MARK: - Autopilot (reactive)
