@@ -7,6 +7,7 @@ enum ControlIcons {
         case "dash":     return dash()
         case "shield":   return shield()
         case "disguise": return mask()
+        case "grapple":  return hook()
         default:         return speech()   // interact / talk / charge / fight
         }
     }
@@ -75,6 +76,22 @@ enum ControlIcons {
             eye.position = CGPoint(x: dx, y: 0)
             node.addChild(eye)
         }
+        return node
+    }
+
+    /// Grappling hook + rope.
+    static func hook() -> SKNode {
+        let node = SKNode()
+        let rope = CGMutablePath()
+        rope.move(to: CGPoint(x: -10, y: -11)); rope.addLine(to: CGPoint(x: 2, y: 4))
+        node.addChild(stroke(rope, width: 2.5))
+        // hook curve
+        let h = CGMutablePath()
+        h.addArc(center: CGPoint(x: 2, y: 8), radius: 6, startAngle: .pi * 1.1, endAngle: .pi * 0.1, clockwise: false)
+        node.addChild(stroke(h, width: 3))
+        let barb = CGMutablePath()
+        barb.move(to: CGPoint(x: 8, y: 8)); barb.addLine(to: CGPoint(x: 11, y: 12))
+        node.addChild(stroke(barb, width: 2.5))
         return node
     }
 

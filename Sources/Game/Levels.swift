@@ -72,6 +72,7 @@ struct LevelData {
     var dronesStyle: Bool = false          // minions drawn/behave as drones
     var bossPhases: Int = 1                // multi-phase boss
     var isBoat: Bool = false               // boat chase variant
+    var grappleAnchors: [CGPoint] = []     // zip-to grapple points
 }
 
 enum Biomes {
@@ -419,7 +420,8 @@ enum Levels {
                     CGPoint(x: 2050, y: 1250), CGPoint(x: 2250, y: 800), CGPoint(x: 1500, y: 950)],
         searchlights: [CGPoint(x: 1400, y: 1500), CGPoint(x: 2000, y: 600), CGPoint(x: 1750, y: 1450)],
         keycardPos: CGPoint(x: 1950, y: 1550),
-        dronesStyle: true)
+        dronesStyle: true,
+        grappleAnchors: [CGPoint(x: 1400, y: 1100), CGPoint(x: 2000, y: 1000), CGPoint(x: 1700, y: 1500)])
 
     static let lab = LevelData(
         index: 5,
@@ -450,7 +452,8 @@ enum Levels {
                      CGPoint(x: 2200, y: 1100)],
         speedPads: [CGPoint(x: 800, y: 900), CGPoint(x: 1600, y: 600), CGPoint(x: 2000, y: 1300)],
         magnetSpots: [CGPoint(x: 1250, y: 600)],
-        waterRects: [CGRect(x: 1350, y: 700, width: 260, height: 200)])
+        waterRects: [CGRect(x: 1350, y: 700, width: 260, height: 200)],
+        grappleAnchors: [CGPoint(x: 1250, y: 900), CGPoint(x: 1700, y: 900), CGPoint(x: 2150, y: 1100)])
 
     static let sewers = LevelData(
         index: 6,
@@ -483,7 +486,8 @@ enum Levels {
         starSpots: [CGPoint(x: 1300, y: 1350)],
         waterRects: [CGRect(x: 700, y: 800, width: 500, height: 280),
                      CGRect(x: 1700, y: 1050, width: 520, height: 300)],
-        dronesStyle: true)
+        dronesStyle: true,
+        grappleAnchors: [CGPoint(x: 950, y: 1250), CGPoint(x: 1500, y: 700), CGPoint(x: 1960, y: 1450)])
 
     static let harbor = LevelData(
         index: 8,
@@ -583,7 +587,9 @@ enum Levels {
         speedPads: [CGPoint(x: 800, y: 1200), CGPoint(x: 2000, y: 1700)],
         waterRects: [CGRect(x: 1250, y: 850, width: 320, height: 240)],
         keycardPos: CGPoint(x: 2950, y: 1950),
-        dronesStyle: true)
+        dronesStyle: true,
+        grappleAnchors: [CGPoint(x: 1200, y: 1100), CGPoint(x: 1900, y: 1100),
+                         CGPoint(x: 2500, y: 1100), CGPoint(x: 2900, y: 1100)])
 
     static let powerplant = LevelData(
         index: 9,

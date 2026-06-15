@@ -377,6 +377,21 @@ enum CharacterFactory {
         return node
     }
 
+    /// A grapple anchor: a post with a glowing ring you can zip to.
+    static func makeGrappleAnchor(accent: SKColor) -> SKNode {
+        let node = SKNode()
+        let post = SKSpriteNode(color: SKColor(white: 0.35, alpha: 1), size: CGSize(width: 8, height: 30))
+        post.position = CGPoint(x: 0, y: -15); node.addChild(post)
+        let ring = SKShapeNode(circleOfRadius: 13)
+        ring.strokeColor = accent; ring.lineWidth = 4; ring.fillColor = accent.withAlphaComponent(0.18); ring.glowWidth = 3
+        node.addChild(ring)
+        let hook = SKShapeNode(circleOfRadius: 5)
+        hook.strokeColor = .white; hook.lineWidth = 2; hook.fillColor = .clear
+        node.addChild(hook)
+        node.name = "anchor"
+        return node
+    }
+
     static func makeCoin() -> SKNode {
         let node = SKNode()
         let c = SKShapeNode(circleOfRadius: 11)

@@ -21,6 +21,7 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: Sources
+      - path: Resources/Assets.xcassets
     info:
       path: Resources/Info.plist
       properties:
@@ -37,5 +38,5 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kaiditya.game
         GENERATE_INFOPLIST_FILE: "NO"
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: "AppIcon"
         TARGETED_DEVICE_FAMILY: "1"

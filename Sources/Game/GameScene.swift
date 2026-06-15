@@ -13,6 +13,7 @@ final class GameScene: SKScene {
     private var dashBtn: GameButton!
     private var shieldBtn: GameButton!
     private var disguiseBtn: GameButton!
+    private var grappleBtn: GameButton!
     private var buttonTouches: [ObjectIdentifier: GameButton] = [:]
 
     // HUD
@@ -60,6 +61,9 @@ final class GameScene: SKScene {
     private var bossProjectiles: [SKNode] = []
     private var bossCharging = false
     private var bossAttackCounter = 0
+    private var grappleAnchorNodes: [SKNode] = []
+    private var grappleTarget: SKNode?
+    private var grappling = false
 
     // Progression / map
     private var maxUnlocked = 0
@@ -81,7 +85,8 @@ final class GameScene: SKScene {
     private var bossHits = 0
 
     // Flow
-    private enum State { case title, map, intro, playing, dialogue, complete, won }
+    private enum State { case title, map, intro, tour, playing, dialogue, complete, won }
+    private var tourStep = 0
     private var state: State = .title
     private var lastUpdate: TimeInterval = 0
     private var nearestInteract: (() -> Void)?
@@ -160,8 +165,10 @@ final class GameScene: SKScene {
         dashBtn = GameButton(key: "dash", title: "DASH", color: Palette.energy.darker, radius: 38)
         shieldBtn = GameButton(key: "shield", title: "SHIELD", color: Palette.heroRed, radius: 38)
         disguiseBtn = GameButton(key: "disguise", title: "HIDE", color: Palette.bush, radius: 38)
-        for b in [interactBtn!, dashBtn!, shieldBtn!, disguiseBtn!] { cam.addChild(b) }
+        grappleBtn = GameButton(key: "grapple", title: "GRAPPLE", color: Palette.crystal.darker, radius: 38)
+        for b in [interactBtn!, dashBtn!, shieldBtn!, disguiseBtn!, grappleBtn!] { cam.addChild(b) }
         interactBtn.setEnabled(false)
+        grappleBtn.isHidden = true
 
         // Left-side "move" hint (a dashed ring), hidden after first use.
         let hint = SKNode()
@@ -192,6 +199,7 @@ final class GameScene: SKScene {
         dashBtn.position     = CGPoint(x: cx + s, y: cy)       // right
         interactBtn.position = CGPoint(x: cx,     y: cy - s)   // bottom
         disguiseBtn.position = CGPoint(x: cx - s, y: cy)       // left
+        grappleBtn.position  = CGPoint(x: cx,     y: cy + s * 2 + 4)   // contextual, above SHIELD
         moveHint?.position = CGPoint(x: -halfW + 92, y: -halfH + safeBottom + 110)
     }
 
@@ -211,6 +219,7 @@ final class GameScene: SKScene {
         dashBtn.isHidden = hidden
         shieldBtn.isHidden = hidden
         disguiseBtn.isHidden = hidden
+        grappleBtn?.isHidden = true   // contextual; shown by updateGrappleTarget
         controlPanel.isHidden = hidden
         moveHint?.isHidden = hidden || hasMoved
     }
@@ -237,6 +246,7 @@ final class GameScene: SKScene {
         speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []
         magnetTimer = 0; starTimer = 0; speedTimer = 0; bossPhase = 1
         bossProjectiles = []; bossCharging = false; bossAttackCounter = 0
+        grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         maxUnlocked = max(maxUnlocked, idx)
         UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
         bossHits = 0; crystals = 0; caughtCooldown = 0
@@ -379,6 +389,11 @@ final class GameScene: SKScene {
             let k = CharacterFactory.makeKeycard(); k.position = kp; k.zPosition = ZLayer.items
             worldNode.addChild(k); keycardNode = k
         }
+        for p in level.grappleAnchors {
+            let a = CharacterFactory.makeGrappleAnchor(accent: biome.accent)
+            a.position = p; a.zPosition = ZLayer.coverTops + 0.5
+            worldNode.addChild(a); grappleAnchorNodes.append(a)
+        }
     }
 
     private func blip(_ pos: CGPoint, _ text: String, _ color: SKColor) {
@@ -417,7 +432,7 @@ final class GameScene: SKScene {
             }
         }
         for pad in speedPads where pad.position.distance(to: pp) < 40 { speedTimer = 1.3 }
-        if starTimer <= 0 && !player.isShielded {
+        if starTimer <= 0 && !player.isShielded && !grappling {
             for beam in lasers where beam.alpha > 0.5
                 && abs(beam.position.x - pp.x) < 110 && abs(beam.position.y - pp.y) < 16 {
                 handleCaught(); break
@@ -823,6 +838,7 @@ final class GameScene: SKScene {
     private func applyControlMode() {
         if level.isDriving {
             shieldBtn.isHidden = true; disguiseBtn.isHidden = true; interactBtn.isHidden = true
+            grappleBtn.isHidden = true
             controlPanel.isHidden = true
             dashBtn.isHidden = false; dashBtn.setTitle("BOOST")
         } else {
@@ -1042,6 +1058,13 @@ final class GameScene: SKScene {
         state = .playing
         setControlsHidden(false)
         applyControlMode()
+        // First-time tour on level 1.
+        if levelIndex == 0, !demoMode, !UserDefaults.standard.bool(forKey: "kaiditya.tourSeen") {
+            UserDefaults.standard.set(true, forKey: "kaiditya.tourSeen")
+            tourStep = 0
+            showTour()
+            return
+        }
         if level.isDriving {
             hud.showToast("Floor it! 🏎️", color: biome.accent)
             return
@@ -1050,6 +1073,74 @@ final class GameScene: SKScene {
             hud.showToast("Find the crystals — and watch the minions!", color: biome.accent)
         } else {
             hud.showToast(level.name + "!", color: biome.accent)
+        }
+    }
+
+    // MARK: - Start tour
+
+    private func tourSteps() -> [(text: String, target: CGPoint?)] {
+        [
+            ("Welcome, Kaiditya! Touch the LEFT side of the screen and drag to MOVE.", moveHint?.position),
+            ("Tap HIDE to disguise as an ordinary kid — the minions won't recognize you.", disguiseBtn.position),
+            ("Tap HERO to suit up again so you can grab crystals and take on bad guys.", disguiseBtn.position),
+            ("DASH zooms you forward. SHIELD makes you invincible for a moment.", dashBtn.position),
+            ("When you see a GRAPPLE point, tap it to zip across gaps and water!", grappleBtn.position),
+            ("Sneak past the glowing vision cones, hide in bushes, and collect the Energy Crystals. Now go save the world!", nil)
+        ]
+    }
+
+    private func showTour() {
+        state = .tour
+        cam.childNode(withName: "tourOverlay")?.removeFromParent()
+        let steps = tourSteps()
+        let step = steps[min(tourStep, steps.count - 1)]
+
+        let overlay = SKNode(); overlay.name = "tourOverlay"; overlay.zPosition = ZLayer.overlay
+        let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.62), size: CGSize(width: 5000, height: 5000))
+        overlay.addChild(dim)
+
+        // Highlight ring around the target control.
+        if let target = step.target {
+            let ring = SKShapeNode(circleOfRadius: 54)
+            ring.strokeColor = Palette.energy; ring.lineWidth = 4; ring.fillColor = .clear; ring.glowWidth = 4
+            ring.position = target; ring.zPosition = 1
+            ring.run(.repeatForever(.sequence([.scale(to: 1.15, duration: 0.5), .scale(to: 1.0, duration: 0.5)])))
+            overlay.addChild(ring)
+        }
+
+        // Text card (kept away from bottom controls).
+        let cardW = min(size.width - 48, 460)
+        let card = roundedRect(size: CGSize(width: cardW, height: 150), corner: 18, color: Palette.hudPanel)
+        card.strokeColor = Palette.hudAccent; card.lineWidth = 2
+        card.position = CGPoint(x: 0, y: size.height * 0.16)
+        overlay.addChild(card)
+        let eyebrow = SKLabelNode(text: "TIP \(tourStep + 1)/\(steps.count)")
+        eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 12; eyebrow.fontColor = Palette.hudAccent
+        eyebrow.position = CGPoint(x: 0, y: 50); card.addChild(eyebrow)
+        let body = SKLabelNode(text: step.text)
+        body.fontName = "AvenirNext-Medium"; body.fontSize = 16; body.fontColor = .white
+        body.numberOfLines = 4; body.preferredMaxLayoutWidth = cardW - 40
+        body.verticalAlignmentMode = .center; body.horizontalAlignmentMode = .center
+        body.position = CGPoint(x: 0, y: 2); card.addChild(body)
+        let go = SKLabelNode(text: tourStep < steps.count - 1 ? "tap to continue ▸" : "tap to play ▸")
+        go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.energy
+        go.position = CGPoint(x: 0, y: -56); card.addChild(go)
+        go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
+
+        dramatize(card, in: overlay, accent: Palette.hudAccent, rays: false)
+        cam.addChild(overlay)
+        positionOverlay(overlay)
+        SoundFX.shared.play("tap")
+    }
+
+    private func advanceTour() {
+        tourStep += 1
+        if tourStep >= tourSteps().count {
+            cam.childNode(withName: "tourOverlay")?.removeFromParent()
+            state = .playing
+            hud.showToast("Find the crystals — and watch the minions!", color: biome.accent)
+        } else {
+            showTour()
         }
     }
 
@@ -1188,6 +1279,7 @@ final class GameScene: SKScene {
             case .title:    startGame(); return
             case .map:      handleMapTap(camP); return
             case .intro:    dismissIntro(); return
+            case .tour:     advanceTour(); return
             case .dialogue: advanceDialogue(); return
             case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
             case .won:      cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
@@ -1207,6 +1299,9 @@ final class GameScene: SKScene {
             }
             if disguiseBtn.contains(scenePoint: p, in: self) {
                 disguiseBtn.press(); buttonTouches[ObjectIdentifier(t)] = disguiseBtn; toggleDisguise(); continue
+            }
+            if !grappleBtn.isHidden, grappleBtn.contains(scenePoint: p, in: self) {
+                grappleBtn.press(); buttonTouches[ObjectIdentifier(t)] = grappleBtn; grapple(); continue
             }
             if !joystick.isActive {
                 joystick.begin(at: camP, touch: t)
@@ -1243,6 +1338,7 @@ final class GameScene: SKScene {
         case .title: startGame(); return
         case .map: cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)); return
         case .intro: dismissIntro(); return
+        case .tour: advanceTour(); return
         case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
         case .dialogue:
             if code == .keyboardSpacebar || code == .keyboardReturnOrEnter || code == .keyboardJ { advanceDialogue() }
@@ -1257,6 +1353,7 @@ final class GameScene: SKScene {
             if player.tryShield() { hud.showToast("Shield up!", color: Palette.hudAccent); SoundFX.shared.play("shield") }
             else { hud.showToast("Need power!", color: Palette.heroRed) }
         case .keyboardH: toggleDisguise()
+        case .keyboardG: grapple()
         default: pressedKeys.insert(code); nudge(for: code)
         }
     }
@@ -1336,6 +1433,7 @@ final class GameScene: SKScene {
             updatePickups(dt: dt)
             updateMechanics(dt: dt)
             updateBossProjectiles()
+            updateGrappleTarget()
             updateObjectiveProximity()
             updateInteractTarget()
         }
@@ -1367,6 +1465,7 @@ final class GameScene: SKScene {
     }
 
     private func movePlayer(dt: TimeInterval) {
+        if grappling { return }   // the zip animates the player
         var v = joystick.vector
         if v.dx == 0 && v.dy == 0 { v = keyboardVector() }
         if v.dx == 0 && v.dy == 0 { player.stopWalk(); return }
@@ -1379,13 +1478,56 @@ final class GameScene: SKScene {
         player.faceMovement(v)
     }
 
+    // MARK: - Grapple
+
+    private func updateGrappleTarget() {
+        if grappling { grappleBtn.isHidden = true; return }
+        var best: SKNode?; var bestD = CGFloat.greatestFiniteMagnitude
+        for a in grappleAnchorNodes {
+            let d = a.position.distance(to: player.position)
+            if d > 50 && d < 360 && d < bestD { bestD = d; best = a }
+        }
+        for a in grappleAnchorNodes where a !== best {
+            a.removeAction(forKey: "ghi"); a.setScale(1)
+        }
+        grappleTarget = best
+        if let t = best {
+            grappleBtn.isHidden = false; grappleBtn.setEnabled(true)
+            if t.action(forKey: "ghi") == nil {
+                t.run(.repeatForever(.sequence([.scale(to: 1.25, duration: 0.4), .scale(to: 1.0, duration: 0.4)])), withKey: "ghi")
+            }
+        } else {
+            grappleBtn.isHidden = true
+        }
+    }
+
+    private func grapple() {
+        guard !grappling, let target = grappleTarget else { return }
+        grappling = true
+        joystick.end()
+        grappleBtn.isHidden = true
+        let dest = target.position
+        let dist = dest.distance(to: player.position)
+        let dur = min(0.5, max(0.18, TimeInterval(dist / 1500)))
+        // rope line
+        let line = SKShapeNode()
+        let p = CGMutablePath(); p.move(to: player.position); p.addLine(to: dest); line.path = p
+        line.strokeColor = biome.accent; line.lineWidth = 3; line.glowWidth = 2; line.zPosition = ZLayer.fx
+        worldNode.addChild(line)
+        line.run(.sequence([.wait(forDuration: dur), .fadeOut(withDuration: 0.15), .removeFromParent()]))
+        SoundFX.shared.play("dash")
+        let move = SKAction.move(to: dest, duration: dur); move.timingMode = .easeInEaseOut
+        player.faceMovement(CGVector(dx: dest.x - player.position.x, dy: dest.y - player.position.y))
+        player.run(.sequence([move, .run { [weak self] in self?.grappling = false; self?.shake(5, 0.15) }]), withKey: "grapple")
+    }
+
     // MARK: - Stealth
 
     private var playerHidden: Bool { coverRects.contains { $0.contains(player.position) } }
 
     private func updateStealth(dt: TimeInterval) {
         if caughtCooldown > 0 { caughtCooldown -= dt }
-        let exposed = player.inCostume && !playerHidden && !player.isShielded && starTimer <= 0
+        let exposed = player.inCostume && !playerHidden && !player.isShielded && starTimer <= 0 && !grappling
         var caught = false
         for m in minions {
             let sees = exposed && m.canSee(point: player.position)
@@ -1721,7 +1863,7 @@ final class GameScene: SKScene {
     private func updateBossProjectiles() {
         guard objective == .boss else { return }
         bossProjectiles.removeAll { $0.parent == nil }
-        let safe = (starTimer > 0 || player.isShielded)
+        let safe = (starTimer > 0 || player.isShielded || grappling)
         if safe { return }
         for proj in bossProjectiles where proj.parent != nil {
             if proj.name == "ringBlast" {
@@ -1812,6 +1954,7 @@ final class GameScene: SKScene {
         case .title: if tap(0.5) { startGame() }; return
         case .map: if tap(1.0) { cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)) }; return
         case .intro: if tap(1.2) { dismissIntro() }; return
+        case .tour: if tap(1.0) { advanceTour() }; return
         case .complete: if tap(1.5) { cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1) }; return
         case .dialogue: if tap(0.7) { advanceDialogue() }; return
         case .won: return
