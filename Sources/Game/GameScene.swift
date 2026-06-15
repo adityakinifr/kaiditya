@@ -57,6 +57,12 @@ final class GameScene: SKScene {
     private var starTimer: TimeInterval = 0
     private var speedTimer: TimeInterval = 0
     private var bossPhase = 1
+    private var bossProjectiles: [SKNode] = []
+    private var bossCharging = false
+    private var bossAttackCounter = 0
+
+    // Progression / map
+    private var maxUnlocked = 0
 
     // Atmosphere (parented to camera)
     private var ambientOverlay: SKSpriteNode?
@@ -70,7 +76,7 @@ final class GameScene: SKScene {
     private var bossHits = 0
 
     // Flow
-    private enum State { case title, intro, playing, dialogue, complete, won }
+    private enum State { case title, map, intro, playing, dialogue, complete, won }
     private var state: State = .title
     private var lastUpdate: TimeInterval = 0
     private var nearestInteract: (() -> Void)?
@@ -92,6 +98,7 @@ final class GameScene: SKScene {
         camera = cam
         addChild(cam)
         addChild(worldNode)
+        maxUnlocked = UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked")
         setupControls()
         updateSafeInsets()
         layoutHUD()
@@ -223,6 +230,9 @@ final class GameScene: SKScene {
         coinNodes = []; coins = 0; keycardNode = nil; hasKeycard = false
         speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []
         magnetTimer = 0; starTimer = 0; speedTimer = 0; bossPhase = 1
+        bossProjectiles = []; bossCharging = false; bossAttackCounter = 0
+        maxUnlocked = max(maxUnlocked, idx)
+        UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
         bossHits = 0; crystals = 0; caughtCooldown = 0
         nearestInteract = nil
         objective = level.isDriving ? .reachExit : .collect
@@ -900,6 +910,81 @@ final class GameScene: SKScene {
         positionOverlay(overlay)
     }
 
+    private func showMap() {
+        state = .map
+        setControlsHidden(true)
+        cam.childNode(withName: "mapOverlay")?.removeFromParent()
+        let overlay = SKNode(); overlay.name = "mapOverlay"; overlay.zPosition = ZLayer.overlay
+        let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        overlay.addChild(bg)
+        if let stars = Effects.ambient(.sparks, screen: size) {
+            stars.particleColor = SKColor(red: 0.5, green: 0.8, blue: 1, alpha: 1); stars.particleBirthRate = 5
+            overlay.addChild(stars)
+        }
+        let title = SKLabelNode(text: "SELECT A ZONE")
+        title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
+        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
+
+        // Serpentine layout of the 9 zones.
+        let cols = 3
+        let colX: [CGFloat] = [-110, 0, 110]
+        let rowGap: CGFloat = 150
+        let topY = size.height/2 - safeTop - 150
+        var positions: [CGPoint] = []
+        for i in 0..<Levels.all.count {
+            let row = i / cols
+            var col = i % cols
+            if row % 2 == 1 { col = cols - 1 - col }   // serpentine
+            positions.append(CGPoint(x: colX[col], y: topY - CGFloat(row) * rowGap))
+        }
+        // Connecting path lines.
+        let path = CGMutablePath()
+        path.move(to: positions[0])
+        for p in positions.dropFirst() { path.addLine(to: p) }
+        let line = SKShapeNode(path: path)
+        line.strokeColor = SKColor(white: 1, alpha: 0.18); line.lineWidth = 5; line.lineCap = .round
+        line.zPosition = 0; overlay.addChild(line)
+
+        for (i, lvl) in Levels.all.enumerated() {
+            let unlocked = i <= maxUnlocked
+            let node = SKNode(); node.position = positions[i]; node.name = "mapnode_\(i)"; node.zPosition = 1
+            let circle = SKShapeNode(circleOfRadius: 30)
+            circle.fillColor = unlocked ? lvl.biome.accent.withAlphaComponent(0.92) : SKColor(white: 0.25, alpha: 0.9)
+            circle.strokeColor = unlocked ? .white : SKColor(white: 0.45, alpha: 1); circle.lineWidth = 3
+            if unlocked { circle.glowWidth = 3 }
+            node.addChild(circle)
+            let num = SKLabelNode(text: unlocked ? "\(lvl.index)" : "🔒")
+            num.fontName = "AvenirNext-Heavy"; num.fontSize = unlocked ? 22 : 18
+            num.fontColor = unlocked ? .white : SKColor(white: 0.6, alpha: 1)
+            num.verticalAlignmentMode = .center; node.addChild(num)
+            let name = SKLabelNode(text: lvl.name)
+            name.fontName = "AvenirNext-Bold"; name.fontSize = 10
+            name.fontColor = unlocked ? .white : SKColor(white: 0.5, alpha: 1)
+            name.verticalAlignmentMode = .center; name.position = CGPoint(x: 0, y: -44)
+            name.numberOfLines = 2; name.preferredMaxLayoutWidth = 100; node.addChild(name)
+            if i == maxUnlocked && maxUnlocked < Levels.all.count {
+                circle.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.5), .scale(to: 1.0, duration: 0.5)])))
+            }
+            overlay.addChild(node)
+        }
+        let hint = SKLabelNode(text: "tap a zone to play")
+        hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
+        hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 36); overlay.addChild(hint)
+
+        cam.addChild(overlay)
+        positionOverlay(overlay)
+    }
+
+    private func handleMapTap(_ camP: CGPoint) {
+        for i in 0..<Levels.all.count where i <= maxUnlocked {
+            if let node = cam.childNode(withName: "//mapnode_\(i)"),
+               node.contains(cam.convert(camP, to: node.parent!)) {
+                cam.childNode(withName: "mapOverlay")?.removeFromParent()
+                loadLevel(i); return
+            }
+        }
+    }
+
     private func showLevelIntro() {
         state = .intro
         setControlsHidden(true)
@@ -1084,10 +1169,11 @@ final class GameScene: SKScene {
             let camP = t.location(in: cam)
             switch state {
             case .title:    startGame(); return
+            case .map:      handleMapTap(camP); return
             case .intro:    dismissIntro(); return
             case .dialogue: advanceDialogue(); return
             case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
-            case .won:      return
+            case .won:      cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
             case .playing:  break
             }
             if !interactBtn.isHidden, interactBtn.enabled, interactBtn.contains(scenePoint: p, in: self) {
@@ -1138,12 +1224,13 @@ final class GameScene: SKScene {
     private func handleKeyDown(_ code: UIKeyboardHIDUsage) {
         switch state {
         case .title: startGame(); return
+        case .map: cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)); return
         case .intro: dismissIntro(); return
         case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
         case .dialogue:
             if code == .keyboardSpacebar || code == .keyboardReturnOrEnter || code == .keyboardJ { advanceDialogue() }
             return
-        case .won: return
+        case .won: cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
         case .playing: break
         }
         switch code {
@@ -1190,8 +1277,12 @@ final class GameScene: SKScene {
 
     private func startGame() {
         cam.childNode(withName: "titleOverlay")?.removeFromParent()
-        let start = Int(ProcessInfo.processInfo.environment["KAIDITYA_START_LEVEL"] ?? "") ?? 0
-        loadLevel(min(max(start, 0), Levels.all.count - 1))
+        if demoMode {
+            let start = Int(ProcessInfo.processInfo.environment["KAIDITYA_START_LEVEL"] ?? "") ?? 0
+            loadLevel(min(max(start, 0), Levels.all.count - 1))
+        } else {
+            showMap()
+        }
     }
 
     private func toggleDisguise() {
@@ -1227,6 +1318,7 @@ final class GameScene: SKScene {
             updateStealth(dt: dt)
             updatePickups(dt: dt)
             updateMechanics(dt: dt)
+            updateBossProjectiles()
             updateObjectiveProximity()
             updateInteractTarget()
         }
@@ -1428,6 +1520,91 @@ final class GameScene: SKScene {
         guard let v = villain else { return }
         v.run(.repeatForever(.sequence([.moveBy(x: 140, y: 0, duration: 0.8), .moveBy(x: -140, y: 0, duration: 0.8)])), withKey: "dodge")
         run(.repeatForever(.sequence([.wait(forDuration: 0.05), .run { [weak self] in self?.checkBossHit() }])), withKey: "bossLoop")
+        // Attack scheduler: patterns escalate with the phase.
+        run(.repeatForever(.sequence([.wait(forDuration: 2.2), .run { [weak self] in self?.bossAttack() }])), withKey: "bossAttacks")
+    }
+
+    /// Boss attack patterns — more variety as phases rise.
+    private func bossAttack() {
+        guard objective == .boss, let v = villain else { return }
+        bossAttackCounter += 1
+        // Telegraph flash before attacking.
+        v.run(.sequence([.scale(to: 1.18, duration: 0.15), .scale(to: 1.0, duration: 0.15)]))
+        switch bossPhase {
+        case 1:
+            boltVolley(from: v, count: 3, spread: 0.25)
+        case 2:
+            if bossAttackCounter % 2 == 0 { ringBlast(from: v) }
+            else { boltVolley(from: v, count: 5, spread: 0.4) }
+        default:
+            if bossAttackCounter % 3 == 0 { chargeAttack(v) }
+            else if bossAttackCounter % 3 == 1 { ringBlast(from: v) }
+            else { boltVolley(from: v, count: 7, spread: 0.6) }
+        }
+    }
+
+    /// Fan of static bolts aimed at the hero.
+    private func boltVolley(from v: SKNode, count: Int, spread: CGFloat) {
+        let base = atan2(player.position.y - v.position.y, player.position.x - v.position.x)
+        for i in 0..<count {
+            let t = count == 1 ? 0 : (CGFloat(i)/CGFloat(count - 1) - 0.5)
+            let a = base + t * spread * 2
+            let bolt = SKShapeNode(path: {
+                let p = CGMutablePath(); p.move(to: CGPoint(x: -3, y: 9)); p.addLine(to: CGPoint(x: 2, y: 1))
+                p.addLine(to: CGPoint(x: -1, y: 1)); p.addLine(to: CGPoint(x: 3, y: -9)); p.addLine(to: CGPoint(x: -2, y: -1))
+                p.addLine(to: CGPoint(x: 1, y: -1)); p.closeSubpath(); return p
+            }())
+            bolt.fillColor = Palette.energy; bolt.strokeColor = .white; bolt.lineWidth = 1; bolt.glowWidth = 4
+            bolt.setScale(1.6); bolt.zRotation = a - .pi/2
+            bolt.position = v.position; bolt.zPosition = ZLayer.fx
+            worldNode.addChild(bolt); bossProjectiles.append(bolt)
+            let dest = CGPoint(x: v.position.x + cos(a) * 900, y: v.position.y + sin(a) * 900)
+            bolt.run(.sequence([.move(to: dest, duration: 1.6), .removeFromParent()]))
+        }
+    }
+
+    /// Expanding shockwave ring; clip it at the right moment to avoid it.
+    private func ringBlast(from v: SKNode) {
+        let ring = SKShapeNode(circleOfRadius: 30)
+        ring.strokeColor = Palette.heroRed; ring.lineWidth = 8; ring.fillColor = .clear; ring.glowWidth = 4
+        ring.position = v.position; ring.zPosition = ZLayer.fx; ring.name = "ringBlast"
+        worldNode.addChild(ring); bossProjectiles.append(ring)
+        ring.run(.sequence([.group([.scale(to: 12, duration: 1.1), .fadeOut(withDuration: 1.1)]), .removeFromParent()]))
+    }
+
+    /// Villain lunges at the hero, then retreats.
+    private func chargeAttack(_ v: SKNode) {
+        bossCharging = true
+        v.removeAction(forKey: "dodge")
+        let target = CGPoint(x: player.position.x, y: player.position.y)
+        let home = v.position
+        let lunge = SKAction.move(to: target, duration: 0.5); lunge.timingMode = .easeIn
+        v.run(.sequence([lunge, .wait(forDuration: 0.2),
+                         .move(to: home, duration: 0.6),
+                         .run { [weak self] in
+                             self?.bossCharging = false
+                             let d = max(0.4, 0.85 - CGFloat(self?.bossPhase ?? 1) * 0.15)
+                             v.run(.repeatForever(.sequence([.moveBy(x: 170, y: 0, duration: d), .moveBy(x: -170, y: 0, duration: d)])), withKey: "dodge")
+                         }]))
+    }
+
+    private func updateBossProjectiles() {
+        guard objective == .boss else { return }
+        bossProjectiles.removeAll { $0.parent == nil }
+        let safe = (starTimer > 0 || player.isShielded)
+        if safe { return }
+        for proj in bossProjectiles where proj.parent != nil {
+            if proj.name == "ringBlast" {
+                let radius = 30 * proj.xScale
+                let d = proj.position.distance(to: player.position)
+                if abs(d - radius) < 24 { hud.showToast("Zapped! 💥", color: Palette.heroRed); handleCaught() }
+            } else if proj.position.distance(to: player.position) < 26 {
+                proj.removeFromParent(); handleCaught()
+            }
+        }
+        if bossCharging, let v = villain, v.position.distance(to: player.position) < 50 {
+            handleCaught()
+        }
     }
 
     private func checkBossHit() {
@@ -1472,6 +1649,9 @@ final class GameScene: SKScene {
 
     private func defeatVillain() {
         removeAction(forKey: "bossLoop")
+        removeAction(forKey: "bossAttacks")
+        bossProjectiles.forEach { $0.removeFromParent() }
+        bossProjectiles = []
         objective = .done
         villain?.removeAction(forKey: "dodge")
         villain?.run(.sequence([
@@ -1495,6 +1675,7 @@ final class GameScene: SKScene {
         }
         switch state {
         case .title: if tap(0.5) { startGame() }; return
+        case .map: if tap(1.0) { cam.childNode(withName: "mapOverlay")?.removeFromParent(); loadLevel(min(maxUnlocked, Levels.all.count - 1)) }; return
         case .intro: if tap(1.2) { dismissIntro() }; return
         case .complete: if tap(1.5) { cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1) }; return
         case .dialogue: if tap(0.7) { advanceDialogue() }; return

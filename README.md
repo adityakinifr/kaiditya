@@ -41,7 +41,9 @@ Core** charging · DASH + SHIELD powers + energy meter · **driving chase** · *
 chase** · curved roads + same-direction traffic + crashes · **coins/economy** ·
 **keycard + locked exit** · **rotating searchlights** · **toggling laser gates** ·
 **speed pads** · **crystal-magnet power-up** · **Super-Star invincibility** · **water
-slow zones** · **stealth takedowns** · **drone enemies** · **multi-phase boss** ·
+slow zones** · **stealth takedowns** · **drone enemies** · **multi-phase boss** with
+escalating **attack patterns** (bolt volleys, shockwave rings, charge lunges) and
+summoned guards · a **level-select map** with persistent unlock progress ·
 dramatic cinematic popups · pill-banner toasts · hardware-keyboard support.
 
 ## Gameplay
