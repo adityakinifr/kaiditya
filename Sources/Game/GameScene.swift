@@ -1728,7 +1728,7 @@ final class GameScene: SKScene {
         startDayNight()
         cam.position = clampedCamera(player.position)
         hud.updateObjective(level: "HERO CITY", title: "Welcome home, hero!",
-                            hint: "Enter a glowing portal for missions · visit the SHOP & ARCADE", progress: "")
+                            hint: "Tap MISSIONS to play · explore the town!", progress: "")
         hud.updateCrystals(0); hud.setCrystalsHidden(true)
         hud.updateCoins(Economy.coins); hud.updateEnergy(1); hud.hideBossBar()
         setControlsHidden(false); applyControlMode()
@@ -2344,7 +2344,7 @@ final class GameScene: SKScene {
                                 progress: "\(min(questProgress, questTarget))/\(questTarget)")
         } else {
             hud.updateObjective(level: "HERO CITY", title: "Welcome home, hero!",
-                                hint: "Enter a glowing portal for missions · visit the SHOP & ARCADE", progress: "")
+                                hint: "Tap MISSIONS to play · explore the town!", progress: "")
         }
     }
 
