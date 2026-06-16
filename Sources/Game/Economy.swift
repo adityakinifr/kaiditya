@@ -146,6 +146,30 @@ enum Economy {
         return (reward, streak)
     }
 
+    // MARK: Wishing fountain (once-per-day fortune)
+
+    static var canWishToday: Bool { UserDefaults.standard.integer(forKey: "kaiditya.wishday") != today }
+
+    private static let fortunes = [
+        "A brave heart shines brightest.",
+        "Adventure favours the curious.",
+        "Today, luck is on your side.",
+        "Even small heroes save the day.",
+        "Kindness is your secret power.",
+        "Great things are coming your way."
+    ]
+
+    /// Make a wish (once per day). Returns a fortune and any bonus coins won.
+    @discardableResult
+    static func wish() -> (fortune: String, bonus: Int) {
+        guard canWishToday else { return ("You already wished today — come back tomorrow!", 0) }
+        UserDefaults.standard.set(today, forKey: "kaiditya.wishday")
+        // 50% chance of a lucky bonus.
+        let bonus = Bool.random() ? [3, 5, 8].randomElement()! : 0
+        if bonus > 0 { addCoins(bonus) }
+        return (fortunes.randomElement()!, bonus)
+    }
+
     /// Buy (and auto-equip) a costume, or just equip if already owned.
     @discardableResult
     static func selectCostume(_ c: Costume) -> Bool {

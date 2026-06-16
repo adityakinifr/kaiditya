@@ -75,6 +75,7 @@ final class GameScene: SKScene {
     private var missionsPortal: SKNode?
     private var chestNode: SKNode?
     private let chestPos = CGPoint(x: 830, y: 1080)
+    private let fountainPos = CGPoint(x: 950, y: 600)
     private var shopFromHub = false
     // Hub side-quest (Tommy's Coin Rush)
     private var questActive = false
@@ -153,6 +154,18 @@ final class GameScene: SKScene {
         if ProcessInfo.processInfo.environment["KAIDITYA_ARCADE"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.startMinigame()
+            }
+        }
+        if ProcessInfo.processInfo.environment["KAIDITYA_WISH"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self.enterHub()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    guard let self else { return }
+                    self.player.position = CGPoint(x: self.fountainPos.x, y: self.fountainPos.y - 70)
+                    self.updateHubInteract()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.makeWish() }
+                }
             }
         }
         if ProcessInfo.processInfo.environment["KAIDITYA_MAP"] == "1" {
@@ -1762,7 +1775,7 @@ final class GameScene: SKScene {
         plaza.position = CGPoint(x: 950, y: 850); plaza.zPosition = ZLayer.pathDeco
         worldNode.addChild(plaza)
 
-        addFountain(at: CGPoint(x: 950, y: 600))
+        addFountain(at: fountainPos)
         for p in [CGPoint(x: 300, y: 520), CGPoint(x: 1600, y: 520),
                   CGPoint(x: 300, y: 1150), CGPoint(x: 1600, y: 1150)] { addLamp(at: p) }
         for p in [CGPoint(x: 790, y: 600), CGPoint(x: 1110, y: 600)] { addBench(at: p) }
@@ -2187,11 +2200,40 @@ final class GameScene: SKScene {
             enabled = true; label = "SHOP"; nearestInteract = { [weak self] in self?.openShopFromHub() }
         } else if let a = arcadeDoor, a.distance(to: pp) < 72 {
             enabled = true; label = "ARCADE"; nearestInteract = { [weak self] in self?.openArcade() }
+        } else if fountainPos.distance(to: pp) < 88 {
+            enabled = true; label = "WISH"; nearestInteract = { [weak self] in self?.makeWish() }
         } else if let npc = nearestNPC(), npc.position.distance(to: pp) < 72 {
             enabled = true; label = "TALK"; nearestInteract = { [weak self] in self?.talkTo(npc) }
         }
         interactBtn.setTitle(label)
         interactBtn.setEnabled(enabled)
+    }
+
+    /// Wishing fountain: a once-per-day fortune with a chance at lucky bonus coins.
+    private func makeWish() {
+        guard Economy.canWishToday else {
+            hud.showToast("You already wished today — come back tomorrow!", color: Palette.hudAccent)
+            SoundFX.shared.play("tap"); return
+        }
+        let result = Economy.wish()
+        SoundFX.shared.play(result.bonus > 0 ? "powerup" : "coin")
+        // A sparkle burst over the fountain water.
+        if let spark = Effects.ambient(.sparks, screen: CGSize(width: 80, height: 80)) {
+            spark.particleColor = Palette.energy; spark.particleBirthRate = 120; spark.numParticlesToEmit = 40
+            spark.particleLifetime = 0.9; spark.particleSpeed = 90; spark.particlePositionRange = CGVector(dx: 40, dy: 10)
+            spark.position = CGPoint(x: fountainPos.x, y: fountainPos.y + 10); spark.zPosition = ZLayer.fx + 2
+            worldNode.addChild(spark)
+            spark.run(.sequence([.wait(forDuration: 1.2), .removeFromParent()]))
+        }
+        blip(fountainPos, "✨", Palette.energy)
+        hud.showToast("🪙 \"\(result.fortune)\"", color: Palette.crystal)
+        if result.bonus > 0 {
+            hud.updateCoins(Economy.coins)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) { [weak self] in
+                self?.hud.showToast("Lucky wish! +\(result.bonus) ★", color: Palette.energy)
+            }
+        }
+        updateHubInteract()
     }
 
     private func giveCarriedItem(_ glyph: String) {
