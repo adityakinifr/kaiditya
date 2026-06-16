@@ -995,25 +995,25 @@ final class GameScene: SKScene {
             stars.particleBirthRate = 6; overlay.addChild(stars)
         }
 
-        let card = roundedRect(size: CGSize(width: min(size.width - 40, 460), height: 340), corner: 24, color: Palette.hudPanel)
+        let card = roundedRect(size: CGSize(width: min(size.width - 40, 460), height: 400), corner: 24, color: Palette.hudPanel)
         card.strokeColor = Palette.hudAccent; card.lineWidth = 2
-        card.position = CGPoint(x: 0, y: 30); overlay.addChild(card)
+        card.position = CGPoint(x: 0, y: 10); overlay.addChild(card)
 
         let title = SKLabelNode(text: "KAIDITYA")
         title.fontName = "AvenirNext-Heavy"; title.fontSize = 56; title.fontColor = Palette.energy
-        title.position = CGPoint(x: 0, y: 96); card.addChild(title)
+        title.position = CGPoint(x: 0, y: 130); card.addChild(title)
         let sub = SKLabelNode(text: "Pint-Sized Hero, Big-Time Save")
         sub.fontName = "AvenirNext-Medium"; sub.fontSize = 17; sub.fontColor = .white
-        sub.position = CGPoint(x: 0, y: 56); card.addChild(sub)
+        sub.position = CGPoint(x: 0, y: 90); card.addChild(sub)
 
         let hero = CharacterFactory.makeHero()
-        hero.setScale(1.7); hero.position = CGPoint(x: 0, y: -8)
+        hero.setScale(1.2); hero.position = CGPoint(x: 0, y: -20)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:9,duration:0.5), .moveBy(x:0,y:-9,duration:0.5)])))
         card.addChild(hero)
 
         let play = roundedRect(size: CGSize(width: 220, height: 56), corner: 14, color: Palette.heroBlue)
         play.strokeColor = .white; play.lineWidth = 2
-        play.position = CGPoint(x: 0, y: -112); play.name = "playButton"
+        play.position = CGPoint(x: 0, y: -150); play.name = "playButton"
         play.run(.repeatForever(.sequence([.scale(to: 1.04, duration: 0.7), .scale(to: 1.0, duration: 0.7)])))
         let playLabel = SKLabelNode(text: "▶  PLAY")
         playLabel.fontName = "AvenirNext-Heavy"; playLabel.fontSize = 23; playLabel.fontColor = .white
