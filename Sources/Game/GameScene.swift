@@ -54,6 +54,7 @@ final class GameScene: SKScene {
     private var starNodes: [SKNode] = []
     private var lasers: [SKShapeNode] = []
     private var waterRects: [CGRect] = []
+    private var hazards: [SKNode] = []
     private var magnetTimer: TimeInterval = 0
     private var starTimer: TimeInterval = 0
     private var speedTimer: TimeInterval = 0
@@ -61,6 +62,11 @@ final class GameScene: SKScene {
     private var bossFightActive = false
     private let maxLives = 5
     private var lives = 5
+
+    // Difficulty ramps gently with mission progression (levelIndex 0…10).
+    private var stealthAlertRate: CGFloat { 1.05 + CGFloat(levelIndex) * 0.10 }  // ~0.95s → ~0.5s to be spotted
+    private var stealthRangeMul: CGFloat { 1.0 + CGFloat(levelIndex) * 0.02 }    // up to ~1.2x vision range
+    private var stealthSpeedMul: CGFloat { 1.0 + CGFloat(levelIndex) * 0.025 }   // up to ~1.25x patrol/sweep
     private var bossProjectiles: [SKNode] = []
     private var bossCharging = false
     private var bossAttackCounter = 0
@@ -176,6 +182,8 @@ final class GameScene: SKScene {
                     // Move the camera onto the enemies (offset clear of hazards).
                     if self.level.hasBoss {
                         self.player.position = CGPoint(x: self.level.exitPos.x, y: self.level.exitPos.y - 130)
+                    } else if let h = self.level.hazardSpots.first {
+                        self.player.position = CGPoint(x: h.x, y: h.y - 80)
                     } else if let s = self.level.searchlights.first {
                         self.player.position = CGPoint(x: s.x, y: s.y - 150)
                     } else if let g = self.level.laserGates.first {
@@ -376,7 +384,7 @@ final class GameScene: SKScene {
         truck = nil; trafficCars = []; trafficTimer = 0; driveSpinTimer = 0
         chaseTime = 0; truckTiredAnnounced = false
         coinNodes = []; coins = 0; keycardNode = nil; hasKeycard = false
-        speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []
+        speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []; hazards = []
         magnetTimer = 0; starTimer = 0; speedTimer = 0; bossPhase = 1
         bossProjectiles = []; bossCharging = false; bossAttackCounter = 0; bossFightActive = false
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
@@ -450,7 +458,9 @@ final class GameScene: SKScene {
         for c in level.coverSpots { addCover(at: c) }
         for spot in level.crystalSpots { addCrystal(at: spot) }
         for wp in level.minionPatrols {
-            let m = Minion(waypoints: wp, speed: level.minionSpeed, range: level.minionRange, drone: level.dronesStyle)
+            let m = Minion(waypoints: wp, speed: level.minionSpeed * stealthSpeedMul,
+                           range: level.minionRange * stealthRangeMul, drone: level.dronesStyle)
+            m.alertRate = stealthAlertRate
             worldNode.addChild(m); minions.append(m)
         }
         if let core = level.corePos { addPowerCore(at: core) }
@@ -504,15 +514,20 @@ final class GameScene: SKScene {
             worldNode.addChild(s); starNodes.append(s)
         }
         for p in level.searchlights {
-            let sl = Minion(waypoints: [p], speed: 0, range: max(level.minionRange, 175), rotating: true)
+            let sl = Minion(waypoints: [p], speed: 0, range: max(level.minionRange, 175) * stealthRangeMul, rotating: true)
+            sl.alertRate = stealthAlertRate
+            sl.sweepSpeed = 1.1 * stealthSpeedMul
             worldNode.addChild(sl); minions.append(sl)
         }
         for p in level.laserGates {
             let beam = SKShapeNode(rectOf: CGSize(width: 220, height: 10), cornerRadius: 5)
             beam.fillColor = Palette.heroRed.withAlphaComponent(0.85); beam.strokeColor = Palette.heroRed; beam.glowWidth = 6
             beam.position = p; beam.zPosition = ZLayer.fx
-            beam.run(.repeatForever(.sequence([.fadeAlpha(to: 1, duration: 0.1), .wait(forDuration: 1.1),
-                                               .fadeAlpha(to: 0.06, duration: 0.1), .wait(forDuration: 0.9)])))
+            // Later levels: beam stays on longer and the safe gap shrinks.
+            let onTime = 1.1 + Double(levelIndex) * 0.04
+            let offTime = max(0.5, 0.9 - Double(levelIndex) * 0.035)
+            beam.run(.repeatForever(.sequence([.fadeAlpha(to: 1, duration: 0.1), .wait(forDuration: onTime),
+                                               .fadeAlpha(to: 0.06, duration: 0.1), .wait(forDuration: offTime)])))
             worldNode.addChild(beam); lasers.append(beam)
             // Cannon-bots bookend the beam — solid (not children of the blinking beam).
             for ex in [-110.0, 110.0] {
@@ -520,6 +535,10 @@ final class GameScene: SKScene {
                 turret.position = CGPoint(x: p.x + ex, y: p.y); turret.zPosition = ZLayer.fx + 0.2
                 worldNode.addChild(turret)
             }
+        }
+        for p in level.hazardSpots {
+            let t = CharacterFactory.makeStaticTrap(); t.position = p; t.zPosition = ZLayer.items
+            worldNode.addChild(t); hazards.append(t)
         }
         if let kp = level.keycardPos {
             let k = CharacterFactory.makeKeycard(); k.position = kp; k.zPosition = ZLayer.items
@@ -573,6 +592,10 @@ final class GameScene: SKScene {
             for beam in lasers where beam.alpha > 0.5
                 && abs(beam.position.x - pp.x) < 110 && abs(beam.position.y - pp.y) < 16 {
                 handleCaught(); break
+            }
+            // Electric traps cost a life on contact.
+            for t in hazards where t.position.distance(to: pp) < 28 {
+                hud.showToast("Zapped by a trap! ⚡", color: Palette.heroRed); handleCaught(); break
             }
         }
         // Stealth takedown: reach a minion while unseen / dashing / starred.

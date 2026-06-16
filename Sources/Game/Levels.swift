@@ -73,6 +73,7 @@ struct LevelData {
     var bossPhases: Int = 1                // multi-phase boss
     var isBoat: Bool = false               // boat chase variant
     var grappleAnchors: [CGPoint] = []     // zip-to grapple points
+    var hazardSpots: [CGPoint] = []        // stationary electric traps (cost a life)
     var isHub: Bool = false                // free-roam home town
 }
 
@@ -421,7 +422,8 @@ enum Levels {
         exitLabel: "TOP",
         coinSpots: [CGPoint(x: 800, y: 1050), CGPoint(x: 1700, y: 1050), CGPoint(x: 1250, y: 700)],
         searchlights: [CGPoint(x: 1000, y: 700), CGPoint(x: 1500, y: 1400)],
-        starSpots: [CGPoint(x: 1250, y: 1300)])
+        starSpots: [CGPoint(x: 1250, y: 1300)],
+        hazardSpots: [CGPoint(x: 1100, y: 1000), CGPoint(x: 1650, y: 1300)])
 
     // MARK: Expansion levels
 
@@ -488,7 +490,8 @@ enum Levels {
         speedPads: [CGPoint(x: 800, y: 900), CGPoint(x: 1600, y: 600), CGPoint(x: 2000, y: 1300)],
         magnetSpots: [CGPoint(x: 1250, y: 600)],
         waterRects: [CGRect(x: 1350, y: 700, width: 260, height: 200)],
-        grappleAnchors: [CGPoint(x: 1250, y: 900), CGPoint(x: 1700, y: 900), CGPoint(x: 2150, y: 1100)])
+        grappleAnchors: [CGPoint(x: 1250, y: 900), CGPoint(x: 1700, y: 900), CGPoint(x: 2150, y: 1100)],
+        hazardSpots: [CGPoint(x: 1050, y: 850), CGPoint(x: 1850, y: 1050)])
 
     static let sewers = LevelData(
         index: 6,
@@ -624,7 +627,8 @@ enum Levels {
         keycardPos: CGPoint(x: 2950, y: 1950),
         dronesStyle: true,
         grappleAnchors: [CGPoint(x: 1200, y: 1100), CGPoint(x: 1900, y: 1100),
-                         CGPoint(x: 2500, y: 1100), CGPoint(x: 2900, y: 1100)])
+                         CGPoint(x: 2500, y: 1100), CGPoint(x: 2900, y: 1100)],
+        hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1700)])
 
     static let powerplant = LevelData(
         index: 9,
@@ -662,5 +666,6 @@ enum Levels {
         laserGates: [CGPoint(x: 1300, y: 900), CGPoint(x: 1300, y: 1500), CGPoint(x: 1900, y: 1200),
                      CGPoint(x: 2300, y: 900), CGPoint(x: 2300, y: 1500), CGPoint(x: 2700, y: 1200)],
         magnetSpots: [CGPoint(x: 1000, y: 1700)],
-        starSpots: [CGPoint(x: 2300, y: 1150)])
+        starSpots: [CGPoint(x: 2300, y: 1150)],
+        hazardSpots: [CGPoint(x: 1000, y: 1150), CGPoint(x: 1700, y: 1000), CGPoint(x: 2400, y: 1500)])
 }

@@ -489,6 +489,33 @@ enum CharacterFactory {
         return node
     }
 
+    /// A stationary electric trap — telegraphed warning ring + crackling core.
+    /// Touching it costs the hero a life.
+    static func makeStaticTrap() -> SKNode {
+        let node = SKNode()
+        let base = SKShapeNode(circleOfRadius: 16)
+        base.fillColor = SKColor(white: 0.22, alpha: 1); base.strokeColor = Palette.heroRed; base.lineWidth = 2
+        node.addChild(base)
+        // Pulsing warning ring.
+        let ring = SKShapeNode(circleOfRadius: 22)
+        ring.strokeColor = Palette.heroRed; ring.lineWidth = 2; ring.fillColor = Palette.heroRed.withAlphaComponent(0.08)
+        ring.run(.repeatForever(.sequence([.group([.scale(to: 1.18, duration: 0.6), .fadeAlpha(to: 0.25, duration: 0.6)]),
+                                           .group([.scale(to: 1.0, duration: 0.01), .fadeAlpha(to: 0.9, duration: 0.01)])])))
+        node.addChild(ring)
+        // Crackling bolt core.
+        let core = SKShapeNode(path: boltPath()); core.setScale(0.95)
+        core.fillColor = Palette.energy; core.strokeColor = .white; core.lineWidth = 0.6; core.glowWidth = 4
+        core.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.32), .fadeAlpha(to: 1, duration: 0.32)])))
+        node.addChild(core)
+        if let sp = Effects.ambient(.sparks, screen: CGSize(width: 36, height: 36)) {
+            sp.particleColor = Palette.energy; sp.particleBirthRate = 12; sp.particleLifetime = 0.5
+            sp.particlePositionRange = CGVector(dx: 18, dy: 18); sp.particleSpeed = 30
+            node.addChild(sp)
+        }
+        node.name = "trap"
+        return node
+    }
+
     /// A grapple anchor: a post with a glowing ring you can zip to.
     static func makeGrappleAnchor(accent: SKColor) -> SKNode {
         let node = SKNode()

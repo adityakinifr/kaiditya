@@ -16,6 +16,8 @@ final class Minion: SKNode {
 
     private(set) var facing = CGVector(dx: 1, dy: 0)
     private(set) var alertLevel: CGFloat = 0   // 0..1, fills while seeing hero
+    var alertRate: CGFloat = 1.4               // how fast the alert fills (higher = caught sooner)
+    var sweepSpeed: CGFloat = 1.1              // searchlight rotation speed
     var isStunned = false
     private var stunTimer: TimeInterval = 0
 
@@ -115,7 +117,7 @@ final class Minion: SKNode {
 
     func setSeeing(_ seeing: Bool, dt: TimeInterval) {
         if seeing {
-            alertLevel = min(1, alertLevel + CGFloat(dt) * 1.4)
+            alertLevel = min(1, alertLevel + CGFloat(dt) * alertRate)
             cone.fillColor = SKColor(red: 1, green: 0.3, blue: 0.2, alpha: 0.20)
             innerCone.fillColor = SKColor(red: 1, green: 0.4, blue: 0.25, alpha: 0.30)
         } else {
@@ -139,7 +141,7 @@ final class Minion: SKNode {
         }
         if rotating {
             // Searchlight: stay put, sweep the cone back and forth.
-            sweepAngle += CGFloat(dt) * 1.1
+            sweepAngle += CGFloat(dt) * sweepSpeed
             let a = sin(sweepAngle) * 1.2 + .pi   // sweep around facing left/down-ish
             facing = CGVector(dx: cos(a), dy: sin(a))
             redrawCone()
