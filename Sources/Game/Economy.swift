@@ -127,15 +127,20 @@ enum Economy {
 
     private static var today: Int { Int(Date().timeIntervalSince1970 / 86400) }
     static var canClaimDaily: Bool { UserDefaults.standard.integer(forKey: "kaiditya.daily") != today }
+    static var dailyStreak: Int { UserDefaults.standard.integer(forKey: "kaiditya.streak") }
 
-    /// Claim the once-per-day chest; returns the coin reward (0 if already claimed).
+    /// Claim the once-per-day chest. Reward grows with the consecutive-day streak.
+    /// Returns the reward and the new streak (reward 0 if already claimed today).
     @discardableResult
-    static func claimDaily() -> Int {
-        guard canClaimDaily else { return 0 }
+    static func claimDaily() -> (reward: Int, streak: Int) {
+        guard canClaimDaily else { return (0, dailyStreak) }
+        let last = UserDefaults.standard.integer(forKey: "kaiditya.daily")  // 0 if never claimed
+        let streak = (last == today - 1) ? dailyStreak + 1 : 1
         UserDefaults.standard.set(today, forKey: "kaiditya.daily")
-        let reward = 15
+        UserDefaults.standard.set(streak, forKey: "kaiditya.streak")
+        let reward = min(10 + streak * 5, 50)
         addCoins(reward)
-        return reward
+        return (reward, streak)
     }
 
     /// Buy (and auto-equip) a costume, or just equip if already owned.

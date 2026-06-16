@@ -2085,12 +2085,13 @@ final class GameScene: SKScene {
     private func openArcade() { startMinigame() }
 
     private func openChest() {
-        let reward = Economy.claimDaily()
+        let (reward, streak) = Economy.claimDaily()
         if reward > 0 {
             hud.updateCoins(Economy.coins)
             SoundFX.shared.play("powerup"); shake(5, 0.2)
             blip(chestPos, "+\(reward) ★", Palette.energy)
-            hud.showToast("Daily bonus: +\(reward) coins! 🎁", color: Palette.crystal)
+            let streakMsg = streak > 1 ? " · \(streak)-day streak! 🔥" : ""
+            hud.showToast("Daily bonus: +\(reward) coins!\(streakMsg)", color: Palette.crystal)
             // swap to closed/dim chest
             chestNode?.removeFromParent()
             let closed = CharacterFactory.makeChest(glowing: false)
