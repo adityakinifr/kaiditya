@@ -184,60 +184,94 @@ enum CharacterFactory {
         shadow.position = CGPoint(x: 0, y: -26)
         node.addChild(shadow)
 
-        let cape = SKShapeNode(path: capePath(scale: 1.6))
+        let cape = SKShapeNode(path: capePath(scale: 1.7))
         cape.fillColor = Palette.villain.darker; cape.strokeColor = .clear
-        cape.position = CGPoint(x: 0, y: -4); cape.zPosition = -1
+        cape.position = CGPoint(x: 0, y: -6); cape.zPosition = -2
         node.addChild(cape)
 
-        let body = roundedRect(size: CGSize(width: 40, height: 46), corner: 12,
-                               color: Palette.villain, stroke: Palette.villain.darker, lineWidth: 2)
-        node.addChild(body)
-        // Lightning bolt emblem on chest
-        let bolt = SKShapeNode(path: boltPath()); bolt.setScale(1.3)
-        bolt.fillColor = Palette.energy; bolt.strokeColor = .clear
-        bolt.position = CGPoint(x: 0, y: 2); node.addChild(bolt)
-
-        // Fluffy Chow-Chow mane (spiky ruff behind the head)
-        let mane = SKShapeNode(path: starBurstPath(points: 12, outer: 26, inner: 19))
-        mane.fillColor = fur; mane.strokeColor = furDark; mane.lineWidth = 1.5
-        mane.position = CGPoint(x: 0, y: 34); node.addChild(mane)
-        mane.run(.repeatForever(.sequence([.rotate(byAngle: 0.06, duration: 0.8), .rotate(byAngle: -0.06, duration: 0.8)])))
-
-        // Ears (triangles)
+        // --- Legs with clawed feet ---
         for sx in [-1.0, 1.0] {
-            let ear = SKShapeNode(path: {
-                let p = CGMutablePath()
-                p.move(to: CGPoint(x: CGFloat(sx) * 12, y: 48))
-                p.addLine(to: CGPoint(x: CGFloat(sx) * 22, y: 56))
-                p.addLine(to: CGPoint(x: CGFloat(sx) * 20, y: 42))
-                p.closeSubpath(); return p
-            }())
-            ear.fillColor = fur; ear.strokeColor = furDark; ear.lineWidth = 1.5
-            node.addChild(ear)
+            let thigh = roundedRect(size: CGSize(width: 16, height: 22), corner: 6,
+                                    color: fur, stroke: furDark, lineWidth: 2)
+            thigh.position = CGPoint(x: CGFloat(sx) * 11, y: -26); node.addChild(thigh)
+            let foot = SKShapeNode(path: clawPath()); foot.setScale(1.1)
+            foot.fillColor = fur.lighter; foot.strokeColor = furDark; foot.lineWidth = 1.5
+            foot.position = CGPoint(x: CGFloat(sx) * 11, y: -38); node.addChild(foot)
         }
 
-        // Face
-        let head = SKShapeNode(circleOfRadius: 16)
-        head.fillColor = fur.lighter; head.strokeColor = furDark; head.lineWidth = 2
-        head.position = CGPoint(x: 0, y: 34); node.addChild(head)
-        // Snout
-        let snout = SKShapeNode(ellipseOf: CGSize(width: 16, height: 12))
-        snout.fillColor = fur.lighter.lighter; snout.strokeColor = furDark; snout.lineWidth = 1
-        snout.position = CGPoint(x: 0, y: 28); node.addChild(snout)
-        let nose = SKShapeNode(circleOfRadius: 3)
-        nose.fillColor = Palette.ink; nose.strokeColor = .clear
-        nose.position = CGPoint(x: 0, y: 30); node.addChild(nose)
-        // Angry glowing eyes (angled)
+        // --- Huge lumpy muscular arms (cloud-puff) with clawed fists ---
         for sx in [-1.0, 1.0] {
-            let eye = SKShapeNode(ellipseOf: CGSize(width: 6, height: 7))
-            eye.fillColor = Palette.heroRed; eye.strokeColor = .white; eye.lineWidth = 0.8
-            eye.glowWidth = 3
-            eye.position = CGPoint(x: CGFloat(sx) * 7, y: 38)
-            eye.zRotation = CGFloat(sx) * 0.4
+            let arm = SKNode(); arm.position = CGPoint(x: CGFloat(sx) * 29, y: 4); arm.zPosition = -1
+            for (dx, dy, r) in [(0.0, 13.0, 11.0), (4.0, 0.0, 12.5), (1.0, -13.0, 10.0)] {
+                let puff = SKShapeNode(circleOfRadius: r)
+                puff.fillColor = fur; puff.strokeColor = furDark; puff.lineWidth = 2
+                puff.position = CGPoint(x: CGFloat(sx) * dx, y: dy); arm.addChild(puff)
+            }
+            node.addChild(arm)
+            let fist = SKShapeNode(path: clawPath()); fist.setScale(1.25)
+            fist.fillColor = fur.lighter; fist.strokeColor = furDark; fist.lineWidth = 1.5
+            fist.position = CGPoint(x: CGFloat(sx) * 30, y: -16); node.addChild(fist)
+        }
+
+        // --- Torso ---
+        let body = roundedRect(size: CGSize(width: 44, height: 48), corner: 11,
+                               color: Palette.villain, stroke: Palette.villain.darker, lineWidth: 2)
+        body.position = CGPoint(x: 0, y: 2); node.addChild(body)
+        // X-bandolier across the chest.
+        let strap = SKShapeNode(path: { let p = CGMutablePath()
+            p.move(to: CGPoint(x: -18, y: 18)); p.addLine(to: CGPoint(x: 18, y: -12))
+            p.move(to: CGPoint(x: 18, y: 18)); p.addLine(to: CGPoint(x: -18, y: -12)); return p }())
+        strap.strokeColor = Palette.ink; strap.lineWidth = 5; strap.lineCap = .round
+        strap.position = CGPoint(x: 0, y: 2); node.addChild(strap)
+        // Belt with a bolt buckle.
+        let belt = roundedRect(size: CGSize(width: 46, height: 8), corner: 2, color: Palette.ink)
+        belt.position = CGPoint(x: 0, y: -19); node.addChild(belt)
+        let buckle = SKShapeNode(path: boltPath()); buckle.setScale(0.6)
+        buckle.fillColor = Palette.energy; buckle.strokeColor = .clear
+        buckle.position = CGPoint(x: 0, y: -19); node.addChild(buckle)
+
+        // --- Head ---
+        let head = SKShapeNode(circleOfRadius: 15)
+        head.fillColor = fur.lighter; head.strokeColor = furDark; head.lineWidth = 2
+        head.position = CGPoint(x: 0, y: 37); node.addChild(head)
+        // Angry glowing eyes (angled inward).
+        for sx in [-1.0, 1.0] {
+            let eye = SKShapeNode(ellipseOf: CGSize(width: 7, height: 6))
+            eye.fillColor = Palette.heroRed; eye.strokeColor = .white; eye.lineWidth = 0.8; eye.glowWidth = 3
+            eye.position = CGPoint(x: CGFloat(sx) * 6, y: 39); eye.zRotation = CGFloat(sx) * 0.4
             node.addChild(eye)
         }
+        // Gritted-teeth snarl.
+        let snarl = roundedRect(size: CGSize(width: 15, height: 5), corner: 1.5, color: Palette.ink)
+        snarl.position = CGPoint(x: 0, y: 30); node.addChild(snarl)
+        let teeth = SKShapeNode(path: teethPath(width: 13, count: 4, height: 3))
+        teeth.fillColor = .white; teeth.strokeColor = .clear
+        teeth.position = CGPoint(x: 0, y: 32); node.addChild(teeth)
+        // Flat slab helmet on top.
+        let helmet = roundedRect(size: CGSize(width: 42, height: 12), corner: 3,
+                                 color: Palette.ink, stroke: furDark, lineWidth: 1.5)
+        helmet.position = CGPoint(x: 0, y: 51); node.addChild(helmet)
+        let shine = roundedRect(size: CGSize(width: 30, height: 3), corner: 1.5,
+                                color: SKColor(white: 1, alpha: 0.22))
+        shine.position = CGPoint(x: -2, y: 54); node.addChild(shine)
         node.name = "villain"
         return node
+    }
+
+    /// A chunky three-toed claw (feet & fists).
+    private static func clawPath() -> CGPath {
+        let p = CGMutablePath()
+        p.move(to: CGPoint(x: -8, y: 5))
+        p.addLine(to: CGPoint(x: -8, y: 0))
+        p.addLine(to: CGPoint(x: -5, y: -8))
+        p.addLine(to: CGPoint(x: -2.5, y: -1))
+        p.addLine(to: CGPoint(x: 0, y: -8))
+        p.addLine(to: CGPoint(x: 2.5, y: -1))
+        p.addLine(to: CGPoint(x: 5, y: -8))
+        p.addLine(to: CGPoint(x: 8, y: 0))
+        p.addLine(to: CGPoint(x: 8, y: 5))
+        p.closeSubpath()
+        return p
     }
 
     /// Spiky star/burst path (for manes, bursts).

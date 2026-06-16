@@ -170,7 +170,9 @@ final class GameScene: SKScene {
                     self.cam.childNode(withName: "introOverlay")?.removeFromParent()
                     if self.state == .intro { self.state = .playing }
                     // Move the camera onto the enemies (offset clear of hazards).
-                    if let s = self.level.searchlights.first {
+                    if self.level.hasBoss {
+                        self.player.position = CGPoint(x: self.level.exitPos.x, y: self.level.exitPos.y - 130)
+                    } else if let s = self.level.searchlights.first {
                         self.player.position = CGPoint(x: s.x, y: s.y - 150)
                     } else if let g = self.level.laserGates.first {
                         self.player.position = CGPoint(x: g.x, y: g.y - 150)
