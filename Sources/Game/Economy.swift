@@ -86,7 +86,9 @@ enum Economy {
     private static func upKey(_ u: Upgrade) -> String { "kaiditya.up.\(u.rawValue)" }
 
     static var coins: Int { UserDefaults.standard.integer(forKey: coinKey) }
-    static var coinsEarned: Int { UserDefaults.standard.integer(forKey: "kaiditya.earned") }
+    /// Lifetime coins earned. Floored at the current balance so it stays sensible
+    /// for saves that predate lifetime tracking (earned can never be < coins on hand).
+    static var coinsEarned: Int { max(UserDefaults.standard.integer(forKey: "kaiditya.earned"), coins) }
     static var costumesOwned: Int { Costume.allCases.filter { ownedCostume($0) }.count }
 
     static func addCoins(_ n: Int) {

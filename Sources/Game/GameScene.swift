@@ -1230,7 +1230,7 @@ final class GameScene: SKScene {
         guard let mapOverlay = cam.childNode(withName: "mapOverlay") else { return }
         mapOverlay.childNode(withName: "statsCard")?.removeFromParent()
         let panel = SKNode(); panel.name = "statsCard"; panel.zPosition = 60
-        let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6), size: CGSize(width: 4000, height: 4000))
+        let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.78), size: CGSize(width: 4000, height: 4000))
         panel.addChild(dim)
         let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 320), corner: 20, color: Palette.hudPanel)
         card.strokeColor = Palette.hudAccent; card.lineWidth = 2.5; panel.addChild(card)
