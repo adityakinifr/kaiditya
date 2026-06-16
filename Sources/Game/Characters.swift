@@ -397,6 +397,31 @@ enum CharacterFactory {
         return node
     }
 
+    /// A treasure chest. `glowing` when the daily bonus is available.
+    static func makeChest(glowing: Bool) -> SKNode {
+        let node = SKNode()
+        let shadow = Effects.groundShadow(width: 60, height: 18); shadow.position = CGPoint(x: 0, y: -22); node.addChild(shadow)
+        let brown = SKColor(red: 0.52, green: 0.34, blue: 0.18, alpha: 1)
+        let box = roundedRect(size: CGSize(width: 56, height: 36), corner: 6, color: brown, stroke: brown.darker, lineWidth: 2)
+        box.position = CGPoint(x: 0, y: -6); node.addChild(box)
+        let lid = roundedRect(size: CGSize(width: 60, height: 22), corner: 8, color: brown.lighter, stroke: brown.darker, lineWidth: 2)
+        lid.position = CGPoint(x: 0, y: 14); node.addChild(lid)
+        let band = roundedRect(size: CGSize(width: 60, height: 6), corner: 2, color: Palette.energy)
+        band.position = CGPoint(x: 0, y: 6); node.addChild(band)
+        let lock = SKShapeNode(circleOfRadius: 5); lock.fillColor = Palette.energy; lock.strokeColor = brown.darker; lock.lineWidth = 1
+        lock.position = CGPoint(x: 0, y: 6); node.addChild(lock)
+        if glowing {
+            let glow = SKShapeNode(circleOfRadius: 38); glow.fillColor = Palette.energy.withAlphaComponent(0.22)
+            glow.strokeColor = .clear; glow.glowWidth = 6; glow.zPosition = -1; node.addChild(glow)
+            node.run(.repeatForever(.sequence([.moveBy(x: 0, y: 4, duration: 0.5), .moveBy(x: 0, y: -4, duration: 0.5)])))
+            let spark = SKLabelNode(text: "✨"); spark.fontSize = 18; spark.position = CGPoint(x: 0, y: 38); node.addChild(spark)
+        } else {
+            node.alpha = 0.6
+        }
+        node.name = "chest"
+        return node
+    }
+
     static func makeCoin() -> SKNode {
         let node = SKNode()
         let c = SKShapeNode(circleOfRadius: 11)

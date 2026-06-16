@@ -73,6 +73,8 @@ final class GameScene: SKScene {
     private var shopDoor: CGPoint?
     private var arcadeDoor: CGPoint?
     private var missionsPortal: SKNode?
+    private var chestNode: SKNode?
+    private let chestPos = CGPoint(x: 830, y: 1080)
     private var shopFromHub = false
     // Hub side-quest (Tommy's Coin Rush)
     private var questActive = false
@@ -1650,6 +1652,12 @@ final class GameScene: SKScene {
             c.run(.repeatForever(.sequence([.scaleX(to: 0.3, duration: 0.4), .scaleX(to: 1, duration: 0.4)])))
             worldNode.addChild(c); coinNodes.append(c)
         }
+        // Daily bonus chest.
+        let chest = CharacterFactory.makeChest(glowing: Economy.canClaimDaily)
+        chest.position = chestPos; chest.zPosition = ZLayer.items
+        worldNode.addChild(chest); chestNode = chest
+        let chestTag = SKLabelNode(text: "DAILY"); chestTag.fontName = "AvenirNext-Heavy"; chestTag.fontSize = 11
+        chestTag.fontColor = Palette.energy; chestTag.position = CGPoint(x: 0, y: -34); chest.addChild(chestTag)
         // Missions portal.
         let portal = Effects.portal(accent: biome.accent, label: "MISSIONS")
         portal.position = level.exitPos; portal.zPosition = ZLayer.items
@@ -2001,7 +2009,10 @@ final class GameScene: SKScene {
         }
         nearestInteract = nil
         var label = "TALK"; var enabled = false
-        if let s = shopDoor, s.distance(to: pp) < 72 {
+        if chestPos.distance(to: pp) < 70 {
+            enabled = true; label = Economy.canClaimDaily ? "OPEN" : "DAILY"
+            nearestInteract = { [weak self] in self?.openChest() }
+        } else if let s = shopDoor, s.distance(to: pp) < 72 {
             enabled = true; label = "SHOP"; nearestInteract = { [weak self] in self?.openShopFromHub() }
         } else if let a = arcadeDoor, a.distance(to: pp) < 72 {
             enabled = true; label = "ARCADE"; nearestInteract = { [weak self] in self?.openArcade() }
@@ -2072,6 +2083,25 @@ final class GameScene: SKScene {
     }
 
     private func openArcade() { startMinigame() }
+
+    private func openChest() {
+        let reward = Economy.claimDaily()
+        if reward > 0 {
+            hud.updateCoins(Economy.coins)
+            SoundFX.shared.play("powerup"); shake(5, 0.2)
+            blip(chestPos, "+\(reward) ★", Palette.energy)
+            hud.showToast("Daily bonus: +\(reward) coins! 🎁", color: Palette.crystal)
+            // swap to closed/dim chest
+            chestNode?.removeFromParent()
+            let closed = CharacterFactory.makeChest(glowing: false)
+            closed.position = chestPos; closed.zPosition = ZLayer.items
+            let tag = SKLabelNode(text: "DAILY"); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 11
+            tag.fontColor = Palette.energy; tag.position = CGPoint(x: 0, y: -34); closed.addChild(tag)
+            worldNode.addChild(closed); chestNode = closed
+        } else {
+            hud.showToast("Already opened — come back tomorrow!", color: Palette.heroRed)
+        }
+    }
 
     // MARK: - Crystal Catch minigame
 

@@ -123,6 +123,21 @@ enum Economy {
         return true
     }
 
+    // MARK: Daily bonus
+
+    private static var today: Int { Int(Date().timeIntervalSince1970 / 86400) }
+    static var canClaimDaily: Bool { UserDefaults.standard.integer(forKey: "kaiditya.daily") != today }
+
+    /// Claim the once-per-day chest; returns the coin reward (0 if already claimed).
+    @discardableResult
+    static func claimDaily() -> Int {
+        guard canClaimDaily else { return 0 }
+        UserDefaults.standard.set(today, forKey: "kaiditya.daily")
+        let reward = 15
+        addCoins(reward)
+        return reward
+    }
+
     /// Buy (and auto-equip) a costume, or just equip if already owned.
     @discardableResult
     static func selectCostume(_ c: Costume) -> Bool {
