@@ -1654,6 +1654,7 @@ final class GameScene: SKScene {
 
     private func buildHubWorld() {
         buildGround()
+        buildHubDecor()
         for s in level.signs { addSign(text: s.text, at: s.pos) }
         for t in level.treeSpots { addTree(at: t) }
         // Buildings with glowing doors.
@@ -1693,6 +1694,60 @@ final class GameScene: SKScene {
         let border = SKShapeNode(rect: CGRect(origin: .zero, size: worldSize))
         border.strokeColor = biome.borderColor; border.lineWidth = 10; border.zPosition = ZLayer.decals
         worldNode.addChild(border)
+    }
+
+    private func buildHubDecor() {
+        // A plaza path under the town center.
+        let plaza = SKShapeNode(circleOfRadius: 380)
+        plaza.fillColor = biome.pathColor.withAlphaComponent(0.5); plaza.strokeColor = .clear
+        plaza.position = CGPoint(x: 950, y: 850); plaza.zPosition = ZLayer.pathDeco
+        worldNode.addChild(plaza)
+
+        addFountain(at: CGPoint(x: 950, y: 600))
+        for p in [CGPoint(x: 300, y: 520), CGPoint(x: 1600, y: 520),
+                  CGPoint(x: 300, y: 1150), CGPoint(x: 1600, y: 1150)] { addLamp(at: p) }
+        for p in [CGPoint(x: 790, y: 600), CGPoint(x: 1110, y: 600)] { addBench(at: p) }
+
+        // A few decorative townsfolk going about their day (non-interactive).
+        let tints: [SKColor] = [SKColor(red:0.9,green:0.7,blue:0.4,alpha:1),
+                                SKColor(red:0.5,green:0.8,blue:0.7,alpha:1),
+                                SKColor(red:0.85,green:0.5,blue:0.6,alpha:1)]
+        for (i, p) in [CGPoint(x: 470, y: 920), CGPoint(x: 1430, y: 940), CGPoint(x: 1050, y: 470)].enumerated() {
+            let person = CharacterFactory.makeNPC(tint: tints[i])
+            person.position = p; person.zPosition = ZLayer.characters - 0.2
+            let dx = CGFloat([70, -80, 60][i])
+            person.run(.repeatForever(.sequence([.moveBy(x: dx, y: 0, duration: 2.4), .wait(forDuration: 0.5),
+                                                 .moveBy(x: -dx, y: 0, duration: 2.4), .wait(forDuration: 0.5)])))
+            worldNode.addChild(person)
+        }
+    }
+
+    private func addFountain(at p: CGPoint) {
+        let basin = SKShapeNode(circleOfRadius: 70)
+        basin.fillColor = SKColor(white: 0.75, alpha: 1); basin.strokeColor = SKColor(white: 0.55, alpha: 1); basin.lineWidth = 4
+        basin.position = p; basin.zPosition = ZLayer.decals; worldNode.addChild(basin)
+        let water = SKShapeNode(circleOfRadius: 54)
+        water.fillColor = Palette.water; water.strokeColor = Palette.water.darker; water.lineWidth = 2
+        water.position = p; water.zPosition = ZLayer.decals + 0.5; worldNode.addChild(water)
+        let column = SKShapeNode(circleOfRadius: 14)
+        column.fillColor = SKColor(white: 0.8, alpha: 1); column.strokeColor = SKColor(white: 0.6, alpha: 1)
+        column.position = p; column.zPosition = ZLayer.decals + 0.6; worldNode.addChild(column)
+        if let spray = Effects.ambient(.sparks, screen: CGSize(width: 60, height: 60)) {
+            spray.particleColor = Palette.water.lighter; spray.particleBirthRate = 16; spray.particleLifetime = 1.0
+            spray.particlePositionRange = CGVector(dx: 24, dy: 8); spray.emissionAngle = .pi/2; spray.emissionAngleRange = 0.5
+            spray.particleSpeed = 70; spray.yAcceleration = -120
+            spray.position = CGPoint(x: p.x, y: p.y + 6); spray.zPosition = ZLayer.fx; worldNode.addChild(spray)
+        }
+    }
+
+    private func addBench(at p: CGPoint) {
+        let wood = SKColor(red: 0.55, green: 0.38, blue: 0.22, alpha: 1)
+        let seat = roundedRect(size: CGSize(width: 56, height: 16), corner: 4, color: wood, stroke: wood.darker, lineWidth: 1.5)
+        seat.position = p; seat.zPosition = ZLayer.decals + 1; worldNode.addChild(seat)
+        for dx in [-22.0, 22.0] {
+            let leg = SKSpriteNode(color: wood.darker, size: CGSize(width: 5, height: 12))
+            leg.position = CGPoint(x: p.x + dx, y: p.y - 12); leg.zPosition = ZLayer.decals + 0.9; worldNode.addChild(leg)
+        }
     }
 
     private func addHubBuilding(label: String, at p: CGPoint, roof: SKColor, door: CGPoint?) {
