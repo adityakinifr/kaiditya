@@ -1797,6 +1797,11 @@ final class GameScene: SKScene {
         for p in [CGPoint(x: 790, y: 600), CGPoint(x: 1110, y: 600)] { addBench(at: p) }
         addBalloons(at: CGPoint(x: 1110, y: 720))
         addBalloons(at: CGPoint(x: 800, y: 720))
+        for p in [CGPoint(x: 740, y: 800), CGPoint(x: 1170, y: 820), CGPoint(x: 690, y: 1010),
+                  CGPoint(x: 1210, y: 1000), CGPoint(x: 880, y: 640), CGPoint(x: 1050, y: 1130),
+                  CGPoint(x: 430, y: 760), CGPoint(x: 1500, y: 760)] {
+            addFlowerPatch(at: p)
+        }
 
         // A few decorative townsfolk going about their day (non-interactive).
         let tints: [SKColor] = [SKColor(red:0.9,green:0.7,blue:0.4,alpha:1),
@@ -1858,6 +1863,29 @@ final class GameScene: SKScene {
             spray.particleSpeed = 70; spray.yAcceleration = -120
             spray.position = CGPoint(x: p.x, y: p.y + 6); spray.zPosition = ZLayer.fx; worldNode.addChild(spray)
         }
+    }
+
+    /// A small cluster of simple flowers in the grass — pure ground decor.
+    private func addFlowerPatch(at p: CGPoint) {
+        let petalColors: [SKColor] = [Palette.heroRed, Palette.energy, Palette.crystal,
+                                      SKColor(red: 0.85, green: 0.45, blue: 0.7, alpha: 1)]
+        let patch = SKNode(); patch.position = p; patch.zPosition = ZLayer.pathDeco + 0.5
+        let spots: [CGPoint] = [CGPoint(x: -14, y: 6), CGPoint(x: 12, y: -4), CGPoint(x: 0, y: 14)]
+        for (i, s) in spots.enumerated() {
+            let flower = SKNode(); flower.position = s
+            let petalC = petalColors[(Int(p.x) + i) % petalColors.count]
+            for a in stride(from: 0.0, to: .pi * 2, by: .pi / 2.5) {   // 5 petals
+                let petal = SKShapeNode(circleOfRadius: 3.2)
+                petal.fillColor = petalC; petal.strokeColor = .clear
+                petal.position = CGPoint(x: cos(a) * 4.2, y: sin(a) * 4.2); flower.addChild(petal)
+            }
+            let center = SKShapeNode(circleOfRadius: 2.2)
+            center.fillColor = Palette.energy; center.strokeColor = .clear; flower.addChild(center)
+            flower.setScale(0.0)
+            flower.run(.sequence([.wait(forDuration: Double(i) * 0.12), .scale(to: 1.0, duration: 0.3)]))
+            patch.addChild(flower)
+        }
+        worldNode.addChild(patch)
     }
 
     /// A cheerful bunch of balloons on strings that sway gently — pure ambient decor.
