@@ -31,6 +31,11 @@ final class HUD: SKNode {
     private var bossBarFill = SKShapeNode()
     private let bossName = SKLabelNode()
     private var bossBarWidth: CGFloat = 220
+    private let bossHint = SKLabelNode()
+
+    // Lives (hearts)
+    private let livesNode = SKNode()
+
     private var size: CGSize = .zero
     private var lastEnergy: CGFloat = 1
     private var topInsetStored: CGFloat = 20
@@ -136,6 +141,27 @@ final class HUD: SKNode {
         bossName.fontName = "AvenirNext-Heavy"; bossName.fontSize = 13; bossName.fontColor = Palette.heroRed
         bossName.verticalAlignmentMode = .center; bossName.horizontalAlignmentMode = .center
         bossBar.addChild(bossName)
+        // Persistent how-to-fight hint shown under the boss bar.
+        bossHint.fontName = "AvenirNext-Bold"; bossHint.fontSize = 11.5; bossHint.fontColor = .white
+        bossHint.verticalAlignmentMode = .center; bossHint.horizontalAlignmentMode = .center
+        bossBar.addChild(bossHint)
+
+        // Lives hearts (top-right cluster).
+        livesNode.zPosition = ZLayer.hud
+        addChild(livesNode)
+    }
+
+    /// Set the heart row: `remaining` filled, the rest dimmed.
+    func setLives(_ remaining: Int, max maxLives: Int) {
+        livesNode.removeAllChildren()
+        for i in 0..<maxLives {
+            let h = SKLabelNode(text: "♥")
+            h.fontName = "AvenirNext-Heavy"; h.fontSize = 17
+            h.fontColor = i < remaining ? Palette.heroRed : SKColor(white: 0.34, alpha: 1)
+            h.verticalAlignmentMode = .center; h.horizontalAlignmentMode = .left
+            h.position = CGPoint(x: CGFloat(i) * 20, y: 0)
+            livesNode.addChild(h)
+        }
     }
 
     func showBossBar(name: String, total: Int) {
@@ -163,6 +189,10 @@ final class HUD: SKNode {
         }
         bossName.text = "⚡ \(name) ⚡"
         bossName.position = CGPoint(x: centerX, y: top - 8)
+        bossHint.removeFromParent(); bossBar.addChild(bossHint)
+        bossHint.text = "Chase him & tap HIT!  ·  SHIELD blocks his zaps"
+        bossHint.position = CGPoint(x: centerX, y: top - 48)
+        bossHint.run(.repeatForever(.sequence([.fadeAlpha(to: 0.55, duration: 0.8), .fadeAlpha(to: 1, duration: 0.8)])))
         bossBar.isHidden = false
         updateBossHealth(remaining: total, total: total)
     }
@@ -226,6 +256,8 @@ final class HUD: SKNode {
 
         coinIcon.position = CGPoint(x: halfW - clusterW + 20, y: top - 66)
         coinLabel.position = CGPoint(x: halfW - clusterW + 36, y: top - 66)
+
+        livesNode.position = CGPoint(x: halfW - clusterW + 14, y: top - 90)
 
         toastRestY = top - 4
         if toastBanner.action(forKey: "toast") == nil { toastBanner.position = CGPoint(x: 0, y: toastRestY) }

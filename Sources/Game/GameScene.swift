@@ -58,6 +58,9 @@ final class GameScene: SKScene {
     private var starTimer: TimeInterval = 0
     private var speedTimer: TimeInterval = 0
     private var bossPhase = 1
+    private var bossFightActive = false
+    private let maxLives = 5
+    private var lives = 5
     private var bossProjectiles: [SKNode] = []
     private var bossCharging = false
     private var bossAttackCounter = 0
@@ -169,6 +172,7 @@ final class GameScene: SKScene {
                     guard let self else { return }
                     self.cam.childNode(withName: "introOverlay")?.removeFromParent()
                     if self.state == .intro { self.state = .playing }
+                    self.setControlsHidden(false)   // un-hide the HUD for the preview
                     // Move the camera onto the enemies (offset clear of hazards).
                     if self.level.hasBoss {
                         self.player.position = CGPoint(x: self.level.exitPos.x, y: self.level.exitPos.y - 130)
@@ -180,6 +184,8 @@ final class GameScene: SKScene {
                         self.player.position = CGPoint(x: m.x, y: m.y - 90)
                     }
                     self.cam.position = self.clampedCamera(self.player.position)
+                    // Preview the live boss fight (bar + hint + HIT button) on boss levels.
+                    if self.level.hasBoss { self.objective = .boss; self.beginBossFight() }
                 }
             }
         }
@@ -372,11 +378,12 @@ final class GameScene: SKScene {
         coinNodes = []; coins = 0; keycardNode = nil; hasKeycard = false
         speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []
         magnetTimer = 0; starTimer = 0; speedTimer = 0; bossPhase = 1
-        bossProjectiles = []; bossCharging = false; bossAttackCounter = 0
+        bossProjectiles = []; bossCharging = false; bossAttackCounter = 0; bossFightActive = false
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         maxUnlocked = max(maxUnlocked, idx)
         UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
         bossHits = 0; crystals = 0; caughtCooldown = 0
+        lives = maxLives; hud.setLives(lives, max: maxLives)
         nearestInteract = nil
         objective = level.isDriving ? .reachExit : .collect
 
@@ -959,10 +966,19 @@ final class GameScene: SKScene {
         player.carNode?.run(.sequence([.rotate(byAngle: .pi * 2, duration: 0.5), .run { [weak self] in self?.player.carNode?.zRotation = 0 }]))
         car.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
         SoundFX.shared.play("crash"); shake(11, 0.3)
-        hud.showToast("CRASH! 💥", color: Palette.heroRed)
         let flash = SKSpriteNode(color: SKColor(red:1,green:0.3,blue:0.2,alpha:0.35), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.3), .removeFromParent()]))
+        lives = max(0, lives - 1)
+        hud.setLives(lives, max: maxLives)
+        if lives <= 0 {
+            hud.showToast("Out of lives! Restarting level…", color: Palette.heroRed)
+            run(.sequence([.wait(forDuration: 1.1),
+                           .run { [weak self] in guard let self else { return }; self.loadLevel(self.levelIndex) }]),
+                withKey: "levelRestart")
+        } else {
+            hud.showToast("CRASH! 💔 \(lives) left", color: Palette.heroRed)
+        }
     }
 
     private func applyControlMode() {
@@ -1764,6 +1780,7 @@ final class GameScene: SKScene {
                             hint: "Tap MISSIONS to play · explore the town!", progress: "")
         hud.updateCrystals(0); hud.setCrystalsHidden(true)
         hud.updateCoins(Economy.coins); hud.updateEnergy(1); hud.hideBossBar()
+        hud.setLives(0, max: 0)   // no lives shown in the safe hub
         setControlsHidden(false); applyControlMode()
         refreshQuestMarkers()
         state = .playing
@@ -2220,9 +2237,22 @@ final class GameScene: SKScene {
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
         SoundFX.shared.play("caught"); shake(9, 0.25)
+        lives = max(0, lives - 1)
+        hud.setLives(lives, max: maxLives)
+
+        // Out of lives → restart the whole level.
+        if lives <= 0 {
+            hud.showToast("Out of lives! Restarting level…", color: Palette.heroRed)
+            for m in minions { m.setSeeing(false, dt: 1) }
+            run(.sequence([.wait(forDuration: 1.1),
+                           .run { [weak self] in guard let self else { return }; self.loadLevel(self.levelIndex) }]),
+                withKey: "levelRestart")
+            return
+        }
+
         // During the boss fight, a hit just knocks you back a little (don't reset the arena).
         if objective == .boss {
-            hud.showToast("Zapped! 💥", color: Palette.heroRed)
+            hud.showToast("Zapped! 💔 \(lives) left", color: Palette.heroRed)
             if let v = villain {
                 let away = CGVector(dx: player.position.x - v.position.x, dy: player.position.y - v.position.y)
                 let len = max(hypot(away.dx, away.dy), 1)
@@ -2230,7 +2260,7 @@ final class GameScene: SKScene {
                 player.position.y = max(40, min(worldSize.height - 40, player.position.y + away.dy/len * 120))
             }
         } else {
-            hud.showToast("Spotted! Back to the start.", color: Palette.heroRed)
+            hud.showToast("Spotted! 💔 \(lives) left", color: Palette.heroRed)
             player.position = level.heroSpawn
         }
         for m in minions { m.setSeeing(false, dt: 1) }
@@ -2315,9 +2345,13 @@ final class GameScene: SKScene {
         if objective == .charge, let core = powerCore, core.position.distance(to: player.position) < 80 {
             enabled = true; label = "CHARGE"; nearestInteract = { [weak self] in self?.chargeCore() }
         }
-        if objective == .boss, action(forKey: "bossLoop") == nil,
-           let v = villain, v.position.distance(to: player.position) < 96 {
-            enabled = true; label = "FIGHT"; nearestInteract = { [weak self] in self?.fightVillain() }
+        if objective == .boss, let v = villain {
+            if bossFightActive {
+                // Persistent attack button during the fight (no flicker as he dodges).
+                enabled = true; label = "HIT!"; nearestInteract = { [weak self] in self?.bossStrike() }
+            } else if v.position.distance(to: player.position) < 135 {
+                enabled = true; label = "FIGHT"; nearestInteract = { [weak self] in self?.fightVillain() }
+            }
         }
         interactBtn.setTitle(label)
         interactBtn.setEnabled(enabled)
@@ -2665,26 +2699,45 @@ final class GameScene: SKScene {
     }
 
     private func fightVillain() {
-        guard objective == .boss, action(forKey: "bossLoop") == nil else { return }  // don't restart mid-fight
-        objective = .done   // lock interaction; boss loop drives the rest
+        guard objective == .boss, !bossFightActive else { return }  // don't restart mid-fight
+        objective = .done   // lock interaction during the intro dialogue
         showDialogue(speaker: "Lord Chow-Chow", lines: [
             "You?! A pint-sized hero?",
             "I'll zap you with my static powers!"
         ]) { [weak self] in
             self?.objective = .boss
-            self?.hud.showToast("SHIELD up, then DASH into Static!", color: Palette.energy)
+            self?.hud.showToast("Chase him & tap HIT to attack! SHIELD blocks zaps.", color: Palette.energy)
             self?.beginBossFight()
         }
     }
 
     private func beginBossFight() {
         guard let v = villain else { return }
+        bossFightActive = true
         hud.showBossBar(name: "LORD CHOW-CHOW", total: 3 * level.bossPhases)
         SoundFX.shared.playMusic("boss", volume: 0.55)
-        v.run(.repeatForever(.sequence([.moveBy(x: 140, y: 0, duration: 0.8), .moveBy(x: -140, y: 0, duration: 0.8)])), withKey: "dodge")
-        run(.repeatForever(.sequence([.wait(forDuration: 0.05), .run { [weak self] in self?.checkBossHit() }])), withKey: "bossLoop")
+        v.run(.repeatForever(.sequence([.moveBy(x: 130, y: 0, duration: 0.95), .moveBy(x: -130, y: 0, duration: 0.95)])), withKey: "dodge")
         // Attack scheduler: patterns escalate with the phase.
-        run(.repeatForever(.sequence([.wait(forDuration: 2.2), .run { [weak self] in self?.bossAttack() }])), withKey: "bossAttacks")
+        run(.repeatForever(.sequence([.wait(forDuration: 2.4), .run { [weak self] in self?.bossAttack() }])), withKey: "bossAttacks")
+    }
+
+    /// Land a hit on the boss by tapping HIT while near him (lunges in to connect).
+    private func bossStrike() {
+        guard objective == .boss, bossFightActive, let v = villain else { return }
+        guard action(forKey: "hitCooldown") == nil else { return }   // brief swing cooldown
+        let dx = v.position.x - player.position.x, dy = v.position.y - player.position.y
+        let dist = max(hypot(dx, dy), 1)
+        if dist > 120 {
+            hud.showToast("Get closer to Lord Chow-Chow!", color: Palette.energy)
+            run(.wait(forDuration: 0.3), withKey: "hitCooldown")
+            return
+        }
+        // A quick punch spark toward the boss (the player stays under joystick control).
+        let spark = SKLabelNode(text: "💥"); spark.fontSize = 26
+        spark.position = CGPoint(x: (player.position.x + v.position.x)/2, y: (player.position.y + v.position.y)/2)
+        spark.zPosition = ZLayer.fx; worldNode.addChild(spark)
+        spark.run(.sequence([.group([.scale(to: 1.6, duration: 0.2), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+        landBossHit(v)
     }
 
     /// Boss attack patterns — more variety as phases rise.
@@ -2862,27 +2915,24 @@ final class GameScene: SKScene {
         }
     }
 
-    private func checkBossHit() {
-        guard objective == .boss, let v = villain else { return }
+    /// Apply one hit to the boss (POW, health, phase/defeat). Called from bossStrike.
+    private func landBossHit(_ v: SKNode) {
         let hitsPerPhase = 3
         let totalNeeded = hitsPerPhase * level.bossPhases
-        if v.position.distance(to: player.position) < 74 && player.isDashing && action(forKey: "hitCooldown") == nil {
-            bossHits += 1
-            run(.wait(forDuration: 0.6), withKey: "hitCooldown")
-            v.run(.sequence([.scale(to: 0.8, duration: 0.1), .scale(to: 1.0, duration: 0.1)]))
-            let pow = SKLabelNode(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
-            pow.position = CGPoint(x: v.position.x, y: v.position.y + 50); pow.zPosition = ZLayer.fx; worldNode.addChild(pow)
-            pow.run(.sequence([.group([.moveBy(x:0,y:30,duration:0.4), .fadeOut(withDuration:0.4)]), .removeFromParent()]))
-            SoundFX.shared.play("hit"); shake(8, 0.18)
-            hud.updateBossHealth(remaining: totalNeeded - bossHits, total: totalNeeded)
-            hud.showToast("Hit \(bossHits)/\(totalNeeded)!", color: Palette.energy)
-            // Phase transition?
-            if bossHits < totalNeeded && bossHits % hitsPerPhase == 0 {
-                bossPhase += 1
-                startBossPhase()
-            }
-            if bossHits >= totalNeeded { defeatVillain() }
+        bossHits += 1
+        run(.wait(forDuration: 0.45), withKey: "hitCooldown")
+        v.run(.sequence([.scale(to: 0.8, duration: 0.1), .scale(to: 1.0, duration: 0.1)]))
+        let pow = SKLabelNode(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
+        pow.position = CGPoint(x: v.position.x, y: v.position.y + 50); pow.zPosition = ZLayer.fx; worldNode.addChild(pow)
+        pow.run(.sequence([.group([.moveBy(x:0,y:30,duration:0.4), .fadeOut(withDuration:0.4)]), .removeFromParent()]))
+        SoundFX.shared.play("hit"); shake(8, 0.18)
+        hud.updateBossHealth(remaining: totalNeeded - bossHits, total: totalNeeded)
+        hud.showToast("Hit \(bossHits)/\(totalNeeded)!", color: Palette.energy)
+        if bossHits < totalNeeded && bossHits % hitsPerPhase == 0 {
+            bossPhase += 1
+            startBossPhase()
         }
+        if bossHits >= totalNeeded { defeatVillain() }
     }
 
     private func startBossPhase() {
@@ -2906,7 +2956,7 @@ final class GameScene: SKScene {
     }
 
     private func defeatVillain() {
-        removeAction(forKey: "bossLoop")
+        bossFightActive = false
         removeAction(forKey: "bossAttacks")
         bossProjectiles.forEach { $0.removeFromParent() }
         bossProjectiles = []
