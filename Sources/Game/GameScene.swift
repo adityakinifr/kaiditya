@@ -74,6 +74,7 @@ final class GameScene: SKScene {
     private var arcadeDoor: CGPoint?
     private var missionsPortal: SKNode?
     private var chestNode: SKNode?
+    private var petNode: SKNode?
     private let chestPos = CGPoint(x: 830, y: 1080)
     private let fountainPos = CGPoint(x: 950, y: 600)
     private var shopFromHub = false
@@ -165,6 +166,19 @@ final class GameScene: SKScene {
                     self.player.position = CGPoint(x: self.fountainPos.x, y: self.fountainPos.y - 70)
                     self.updateHubInteract()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.makeWish() }
+                }
+            }
+        }
+        if ProcessInfo.processInfo.environment["KAIDITYA_PET"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self.enterHub()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    guard let self, let dog = self.petNode else { return }
+                    self.player.position = CGPoint(x: dog.position.x - 40, y: dog.position.y)
+                    self.cam.position = self.clampedCamera(self.player.position)
+                    self.updateHubInteract()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.petDog() }
                 }
             }
         }
@@ -1698,7 +1712,7 @@ final class GameScene: SKScene {
         npcs = []; minions = []; crystalNodes = []; coverRects = []
         exitPortal = nil; powerCore = nil; villain = nil
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
-        shopDoor = nil; arcadeDoor = nil; missionsPortal = nil
+        shopDoor = nil; arcadeDoor = nil; missionsPortal = nil; petNode = nil
         coinNodes = []; questActive = false; questDone = false; questProgress = 0
         deliverActive = false; deliverDone = false
         carriedItem?.removeFromParent(); carriedItem = nil
@@ -1758,6 +1772,8 @@ final class GameScene: SKScene {
         worldNode.addChild(chest); chestNode = chest
         let chestTag = SKLabelNode(text: "DAILY"); chestTag.fontName = "AvenirNext-Heavy"; chestTag.fontSize = 11
         chestTag.fontColor = Palette.energy; chestTag.position = CGPoint(x: 0, y: -34); chest.addChild(chestTag)
+        // Biscuit the puppy — wanders the plaza, pettable.
+        addPuppy(at: CGPoint(x: 1080, y: 980))
         // Missions portal.
         let portal = Effects.portal(accent: biome.accent, label: "MISSIONS")
         portal.position = level.exitPos; portal.zPosition = ZLayer.items
@@ -1866,6 +1882,51 @@ final class GameScene: SKScene {
         let sway = SKAction.sequence([.rotate(byAngle: 0.06, duration: 1.4), .rotate(byAngle: -0.06, duration: 1.4)])
         bunch.run(.repeatForever(sway))
         worldNode.addChild(bunch)
+    }
+
+    /// Biscuit: a small vector puppy that ambles around the plaza and can be petted.
+    private func addPuppy(at p: CGPoint) {
+        let dog = SKNode(); dog.position = p; dog.zPosition = ZLayer.characters - 0.1
+        let fur = SKColor(red: 0.72, green: 0.52, blue: 0.32, alpha: 1)
+        let body = roundedRect(size: CGSize(width: 30, height: 18), corner: 8, color: fur, stroke: fur.darker, lineWidth: 1.5)
+        body.position = CGPoint(x: -3, y: 0); dog.addChild(body)
+        let head = SKShapeNode(circleOfRadius: 10); head.fillColor = fur; head.strokeColor = fur.darker; head.lineWidth = 1.5
+        head.position = CGPoint(x: 15, y: 5); dog.addChild(head)
+        for ex in [12.0, 19.0] {  // eyes
+            let eye = SKShapeNode(circleOfRadius: 1.6); eye.fillColor = .black; eye.strokeColor = .clear
+            eye.position = CGPoint(x: ex, y: 7); dog.addChild(eye)
+        }
+        let ear = SKShapeNode(ellipseOf: CGSize(width: 6, height: 11)); ear.fillColor = fur.darker; ear.strokeColor = .clear
+        ear.position = CGPoint(x: 10, y: 11); dog.addChild(ear)
+        let tail = SKShapeNode(); let tp = CGMutablePath()
+        tp.move(to: CGPoint(x: -18, y: 2)); tp.addLine(to: CGPoint(x: -26, y: 10))
+        tail.path = tp; tail.strokeColor = fur.darker; tail.lineWidth = 3; tail.lineCap = .round
+        tail.name = "tail"; dog.addChild(tail)
+        // Wag the tail and amble back and forth.
+        tail.run(.repeatForever(.sequence([.rotate(toAngle: 0.5, duration: 0.25, shortestUnitArc: true),
+                                           .rotate(toAngle: -0.2, duration: 0.25, shortestUnitArc: true)])))
+        dog.run(.repeatForever(.sequence([
+            .moveBy(x: 90, y: 0, duration: 3.0), .wait(forDuration: 0.8),
+            .scaleX(to: -1, duration: 0), .moveBy(x: -90, y: 0, duration: 3.0),
+            .wait(forDuration: 0.8), .scaleX(to: 1, duration: 0)
+        ])))
+        worldNode.addChild(dog); petNode = dog
+    }
+
+    /// Pet Biscuit: happy hop, bark, and a burst of hearts.
+    private func petDog() {
+        guard let dog = petNode else { return }
+        SoundFX.shared.play("collect")
+        dog.removeAction(forKey: "hop")
+        dog.run(.sequence([.moveBy(x: 0, y: 14, duration: 0.14), .moveBy(x: 0, y: -14, duration: 0.14)]), withKey: "hop")
+        for i in 0..<5 {
+            let heart = SKLabelNode(text: "❤️"); heart.fontSize = 16
+            heart.position = CGPoint(x: dog.position.x + CGFloat(i * 6 - 12), y: dog.position.y + 18)
+            heart.zPosition = ZLayer.fx + 3; worldNode.addChild(heart)
+            heart.run(.sequence([.group([.moveBy(x: CGFloat(i * 4 - 8), y: 46, duration: 0.9),
+                                         .fadeOut(withDuration: 0.9)]), .removeFromParent()]))
+        }
+        hud.showToast("Biscuit loves you! 🐶", color: Palette.heroRed)
     }
 
     private func addBench(at p: CGPoint) {
@@ -2228,6 +2289,8 @@ final class GameScene: SKScene {
             enabled = true; label = "ARCADE"; nearestInteract = { [weak self] in self?.openArcade() }
         } else if fountainPos.distance(to: pp) < 88 {
             enabled = true; label = "WISH"; nearestInteract = { [weak self] in self?.makeWish() }
+        } else if let dog = petNode, dog.position.distance(to: pp) < 64 {
+            enabled = true; label = "PET"; nearestInteract = { [weak self] in self?.petDog() }
         } else if let npc = nearestNPC(), npc.position.distance(to: pp) < 72 {
             enabled = true; label = "TALK"; nearestInteract = { [weak self] in self?.talkTo(npc) }
         }
