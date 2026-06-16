@@ -86,9 +86,12 @@ enum Economy {
     private static func upKey(_ u: Upgrade) -> String { "kaiditya.up.\(u.rawValue)" }
 
     static var coins: Int { UserDefaults.standard.integer(forKey: coinKey) }
+    static var coinsEarned: Int { UserDefaults.standard.integer(forKey: "kaiditya.earned") }
+    static var costumesOwned: Int { Costume.allCases.filter { ownedCostume($0) }.count }
 
     static func addCoins(_ n: Int) {
         UserDefaults.standard.set(coins + n, forKey: coinKey)
+        UserDefaults.standard.set(coinsEarned + n, forKey: "kaiditya.earned")
     }
 
     static func owned(_ u: Upgrade) -> Bool { UserDefaults.standard.bool(forKey: upKey(u)) }

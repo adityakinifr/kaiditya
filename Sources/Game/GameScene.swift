@@ -155,6 +155,12 @@ final class GameScene: SKScene {
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.startMinigame()
             }
         }
+        if ProcessInfo.processInfo.environment["KAIDITYA_MAP"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.showMap()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showStats() }
+            }
+        }
         DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             guard let self else { return }
@@ -1036,6 +1042,14 @@ final class GameScene: SKScene {
         title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
         title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
 
+        // Stats button (top-left, mirrors the mute button).
+        let stats = SKNode(); stats.name = "statsButton"; stats.zPosition = 50
+        stats.position = CGPoint(x: -size.width/2 + 40, y: size.height/2 - safeTop - 30)
+        let sc = SKShapeNode(circleOfRadius: 22); sc.fillColor = Palette.hudPanel; sc.strokeColor = Palette.hudAccent; sc.lineWidth = 1.5
+        stats.addChild(sc)
+        let si = SKLabelNode(text: "📊"); si.fontSize = 20; si.verticalAlignmentMode = .center; stats.addChild(si)
+        overlay.addChild(stats)
+
         // Serpentine layout of the 9 zones.
         let cols = 3
         let colX: [CGFloat] = [-110, 0, 110]
@@ -1199,7 +1213,49 @@ final class GameScene: SKScene {
         }
     }
 
+    private func showStats() {
+        guard let mapOverlay = cam.childNode(withName: "mapOverlay") else { return }
+        mapOverlay.childNode(withName: "statsCard")?.removeFromParent()
+        let panel = SKNode(); panel.name = "statsCard"; panel.zPosition = 60
+        let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.6), size: CGSize(width: 4000, height: 4000))
+        panel.addChild(dim)
+        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 320), corner: 20, color: Palette.hudPanel)
+        card.strokeColor = Palette.hudAccent; card.lineWidth = 2.5; panel.addChild(card)
+        let title = SKLabelNode(text: "HERO STATS"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 26
+        title.fontColor = Palette.energy; title.position = CGPoint(x: 0, y: 122); card.addChild(title)
+        let zonesReached = min(UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked") + 1, Levels.all.count)
+        let rows: [(String, String)] = [
+            ("🪙  Coins earned", "\(Economy.coinsEarned)"),
+            ("💰  Coins now", "\(Economy.coins)"),
+            ("🗺  Zones reached", "\(zonesReached) / \(Levels.all.count)"),
+            ("🎯  Best arcade", "\(Economy.bestCatch)"),
+            ("🥸  Costumes", "\(Economy.costumesOwned) / \(Costume.allCases.count)"),
+            ("🔥  Daily streak", "\(Economy.dailyStreak)")
+        ]
+        var y: CGFloat = 78
+        for (label, value) in rows {
+            let l = SKLabelNode(text: label); l.fontName = "AvenirNext-Medium"; l.fontSize = 16; l.fontColor = .white
+            l.horizontalAlignmentMode = .left; l.position = CGPoint(x: -150, y: y); card.addChild(l)
+            let v = SKLabelNode(text: value); v.fontName = "AvenirNext-Heavy"; v.fontSize = 16; v.fontColor = Palette.crystal
+            v.horizontalAlignmentMode = .right; v.position = CGPoint(x: 150, y: y); card.addChild(v)
+            y -= 34
+        }
+        let go = SKLabelNode(text: "tap to close ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
+        go.position = CGPoint(x: 0, y: -132); card.addChild(go)
+        dramatize(card, in: panel, accent: Palette.hudAccent, rays: false)
+        mapOverlay.addChild(panel)
+        SoundFX.shared.play("tap")
+    }
+
     private func handleMapTap(_ camP: CGPoint) {
+        // If the stats card is up, any tap closes it.
+        if let mapOverlay = cam.childNode(withName: "mapOverlay"), let stats = mapOverlay.childNode(withName: "statsCard") {
+            stats.removeFromParent(); return
+        }
+        if let overlay = cam.childNode(withName: "mapOverlay"),
+           let sb = overlay.childNode(withName: "statsButton"), sb.contains(cam.convert(camP, to: overlay)) {
+            showStats(); return
+        }
         if let overlay = cam.childNode(withName: "mapOverlay"),
            let mb = overlay.childNode(withName: "muteButton"), mb.contains(cam.convert(camP, to: overlay)) {
             toggleMute(in: overlay); return
