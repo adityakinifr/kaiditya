@@ -1776,6 +1776,36 @@ final class GameScene: SKScene {
                                                  .moveBy(x: -dx, y: 0, duration: 2.4), .wait(forDuration: 0.5)])))
             worldNode.addChild(person)
         }
+
+        // Ambient bird flocks drifting across the sky for a touch of life.
+        worldNode.run(.repeatForever(.sequence([.wait(forDuration: 6), .run { [weak self] in self?.flyBirdFlock() }])),
+                      withKey: "birds")
+    }
+
+    /// A small V of birds glides across the hub at a high z-layer, then despawns.
+    private func flyBirdFlock() {
+        let flock = SKNode(); flock.zPosition = ZLayer.fx + 2
+        let leftToRight = (Int(player.position.x) % 2 == 0)
+        let y = CGFloat(1000 + (Int(player.position.y) % 400))
+        let startX: CGFloat = leftToRight ? -200 : 2100
+        let endX: CGFloat = leftToRight ? 2100 : -200
+        flock.position = CGPoint(x: startX, y: y)
+        let n = 3 + (Int(player.position.x) % 3)
+        for i in 0..<n {
+            let bird = SKShapeNode()
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: -9, y: 5)); path.addLine(to: CGPoint(x: 0, y: 0)); path.addLine(to: CGPoint(x: 9, y: 5))
+            bird.path = path
+            bird.strokeColor = SKColor(white: 0.25, alpha: 0.85); bird.lineWidth = 2.5; bird.lineCap = .round
+            bird.xScale = leftToRight ? 1 : -1
+            let row = i / 2 + 1
+            bird.position = CGPoint(x: CGFloat((i % 2 == 0 ? -1 : 1) * row) * 26, y: CGFloat(-row) * 16)
+            // gentle wing flap
+            bird.run(.repeatForever(.sequence([.scaleY(to: 0.6, duration: 0.25), .scaleY(to: 1.0, duration: 0.25)])))
+            flock.addChild(bird)
+        }
+        worldNode.addChild(flock)
+        flock.run(.sequence([.moveTo(x: endX, duration: 9), .removeFromParent()]))
     }
 
     private func addFountain(at p: CGPoint) {
