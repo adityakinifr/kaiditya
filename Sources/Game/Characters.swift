@@ -106,44 +106,73 @@ enum CharacterFactory {
     }
 
     /// Villain minion — a static-bot guard with a glowing scanner visor.
+    /// A boxy, snarling little monster — inspired by a kid's sketchbook enemy:
+    /// square body, big round eyes, a V-nose and a jagged-toothed grin.
     static func makeMinion() -> SKNode {
         let node = SKNode()
-        let shadow = Effects.groundShadow(width: 32, height: 12)
-        shadow.position = CGPoint(x: 0, y: -17)
-        node.addChild(shadow)
+        let bodyC = Palette.minion
+        let shadow = Effects.groundShadow(width: 36, height: 12)
+        shadow.position = CGPoint(x: 0, y: -20); node.addChild(shadow)
 
-        let body = roundedRect(size: CGSize(width: 28, height: 32), corner: 8,
-                               color: Palette.minion, stroke: Palette.minion.darker, lineWidth: 1.5)
-        node.addChild(body)
-        // little bolt insignia
-        let bolt = SKShapeNode(path: boltPath()); bolt.setScale(0.7)
-        bolt.fillColor = Palette.energy; bolt.strokeColor = .clear
-        bolt.position = CGPoint(x: 0, y: 4); node.addChild(bolt)
-        // shoulder plates
+        // Stubby legs.
         for sx in [-1.0, 1.0] {
-            let plate = roundedRect(size: CGSize(width: 7, height: 14), corner: 3, color: Palette.minion.darker)
-            plate.position = CGPoint(x: CGFloat(sx) * 16, y: 6); node.addChild(plate)
+            let leg = roundedRect(size: CGSize(width: 9, height: 11), corner: 3, color: bodyC.darker)
+            leg.position = CGPoint(x: CGFloat(sx) * 8, y: -15); node.addChild(leg)
+        }
+        // Square body/head.
+        let body = roundedRect(size: CGSize(width: 34, height: 34), corner: 7,
+                               color: bodyC, stroke: bodyC.darker, lineWidth: 2)
+        body.position = CGPoint(x: 0, y: 6); node.addChild(body)
+        // Stubby side arms.
+        for sx in [-1.0, 1.0] {
+            let arm = roundedRect(size: CGSize(width: 10, height: 7), corner: 3, color: bodyC, stroke: bodyC.darker, lineWidth: 1.5)
+            arm.position = CGPoint(x: CGFloat(sx) * 22, y: 5); node.addChild(arm)
         }
 
-        // Helmet head
-        let head = roundedRect(size: CGSize(width: 24, height: 20), corner: 9,
-                               color: Palette.minion.lighter, stroke: Palette.minion.darker, lineWidth: 1.5)
-        head.position = CGPoint(x: 0, y: 24); node.addChild(head)
-        // Glowing scanner visor with a pulsing light
-        let visor = roundedRect(size: CGSize(width: 20, height: 7), corner: 3.5, color: Palette.ink)
-        visor.position = CGPoint(x: 0, y: 24); node.addChild(visor)
-        let scan = SKShapeNode(circleOfRadius: 2.6)
-        scan.fillColor = Palette.heroRed; scan.strokeColor = .white; scan.lineWidth = 0.6; scan.glowWidth = 3
-        scan.position = CGPoint(x: 0, y: 24)
-        scan.run(.repeatForever(.sequence([.moveBy(x: 6, y: 0, duration: 0.5), .moveBy(x: -12, y: 0, duration: 1.0), .moveBy(x: 6, y: 0, duration: 0.5)])))
-        node.addChild(scan)
-        // antenna
-        let ant = SKShapeNode(path: { let p = CGMutablePath(); p.move(to: CGPoint(x: 0, y: 34)); p.addLine(to: CGPoint(x: 4, y: 42)); return p }())
-        ant.strokeColor = Palette.minion.darker; ant.lineWidth = 2; node.addChild(ant)
-        let tip = SKShapeNode(circleOfRadius: 2.5); tip.fillColor = Palette.energy; tip.strokeColor = .clear; tip.glowWidth = 2
-        tip.position = CGPoint(x: 4, y: 43); node.addChild(tip)
+        // Big round eyes with a glowing red iris (doubles as the alert "scanner").
+        for ex in [-7.5, 7.5] {
+            let white = SKShapeNode(circleOfRadius: 6.2)
+            white.fillColor = .white; white.strokeColor = bodyC.darker; white.lineWidth = 1.5
+            white.position = CGPoint(x: ex, y: 13); node.addChild(white)
+            let iris = SKShapeNode(circleOfRadius: 2.8)
+            iris.fillColor = Palette.heroRed; iris.strokeColor = .clear; iris.glowWidth = 2
+            iris.position = CGPoint(x: ex, y: 13); node.addChild(iris)
+            iris.run(.repeatForever(.sequence([.fadeAlpha(to: 0.45, duration: 0.7), .fadeAlpha(to: 1, duration: 0.7)])))
+        }
+        // V nose.
+        let nose = SKShapeNode(path: { let p = CGMutablePath()
+            p.move(to: CGPoint(x: -3, y: 7)); p.addLine(to: CGPoint(x: 0, y: 2.5)); p.addLine(to: CGPoint(x: 3, y: 7)); return p }())
+        nose.strokeColor = bodyC.darker; nose.lineWidth = 1.5; nose.fillColor = .clear
+        nose.lineJoin = .round; node.addChild(nose)
+        // Snarling mouth with jagged teeth.
+        let mouth = roundedRect(size: CGSize(width: 22, height: 10), corner: 2.5, color: Palette.ink)
+        mouth.position = CGPoint(x: 0, y: -3); node.addChild(mouth)
+        let teeth = SKShapeNode(path: teethPath(width: 20, count: 5, height: 5))
+        teeth.fillColor = .white; teeth.strokeColor = .clear
+        teeth.position = CGPoint(x: 0, y: 1.5); mouth.addChild(teeth)        // top teeth pointing down
+        let teethB = SKShapeNode(path: teethPath(width: 20, count: 5, height: -5))
+        teethB.fillColor = .white; teethB.strokeColor = .clear
+        teethB.position = CGPoint(x: 2, y: -1.5); mouth.addChild(teethB)     // bottom teeth pointing up (offset)
+        // Belly button dots.
+        for bx in [-6.0, 0.0, 6.0] {
+            let dot = SKShapeNode(circleOfRadius: 1.6); dot.fillColor = bodyC.darker; dot.strokeColor = .clear
+            dot.position = CGPoint(x: bx, y: -11); node.addChild(dot)
+        }
         node.name = "minion"
         return node
+    }
+
+    /// A row of triangular teeth across `width`; positive `height` points down.
+    private static func teethPath(width: CGFloat, count: Int, height: CGFloat) -> CGPath {
+        let p = CGMutablePath(); let tw = width / CGFloat(count)
+        for i in 0..<count {
+            let x0 = -width/2 + CGFloat(i) * tw
+            p.move(to: CGPoint(x: x0, y: 0))
+            p.addLine(to: CGPoint(x: x0 + tw/2, y: -height))
+            p.addLine(to: CGPoint(x: x0 + tw, y: 0))
+            p.closeSubpath()
+        }
+        return p
     }
 
     /// The big bad: Lord Chow-Chow — a fluffy-but-fearsome super-villain dog.
@@ -377,6 +406,38 @@ enum CharacterFactory {
         return node
     }
 
+    /// A little legged cannon-bot that anchors a laser beam — inspired by a kid's
+    /// sketchbook "shooter": boxy body, stubby legs, a barrel + glowing muzzle.
+    static func makeLaserTurret(facingRight: Bool) -> SKNode {
+        let node = SKNode()
+        let metal = SKColor(white: 0.30, alpha: 1)
+        let dir: CGFloat = facingRight ? 1 : -1
+        // Legs.
+        for lx in [-6.0, 6.0] {
+            let leg = SKSpriteNode(color: metal.darker, size: CGSize(width: 3.5, height: 9))
+            leg.position = CGPoint(x: lx, y: -13); node.addChild(leg)
+        }
+        // Body.
+        let body = roundedRect(size: CGSize(width: 18, height: 17), corner: 4,
+                               color: metal, stroke: Palette.heroRed, lineWidth: 2)
+        body.position = CGPoint(x: -dir * 2, y: -3); node.addChild(body)
+        // A little rivet eye.
+        let eye = SKShapeNode(circleOfRadius: 2.2); eye.fillColor = Palette.heroRed
+        eye.strokeColor = .white; eye.lineWidth = 0.6
+        eye.position = CGPoint(x: -dir * 2, y: 0); node.addChild(eye)
+        // Barrel pointing toward the beam.
+        let barrel = roundedRect(size: CGSize(width: 15, height: 9), corner: 3,
+                                 color: metal.darker, stroke: Palette.heroRed, lineWidth: 1.5)
+        barrel.position = CGPoint(x: dir * 10, y: -1); node.addChild(barrel)
+        // Pulsing muzzle glow.
+        let muzzle = SKShapeNode(circleOfRadius: 4)
+        muzzle.fillColor = Palette.heroRed; muzzle.strokeColor = .white; muzzle.lineWidth = 0.8; muzzle.glowWidth = 4
+        muzzle.position = CGPoint(x: dir * 17, y: -1)
+        muzzle.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.5), .fadeAlpha(to: 1, duration: 0.5)])))
+        node.addChild(muzzle)
+        return node
+    }
+
     /// A grapple anchor: a post with a glowing ring you can zip to.
     static func makeGrappleAnchor(accent: SKColor) -> SKNode {
         let node = SKNode()
@@ -461,24 +522,64 @@ enum CharacterFactory {
     }
 
     /// Flying drone enemy (minion variant).
+    /// A floating ghost-bot — inspired by a kid's sketchbook spook: domed head,
+    /// hypnotic spiral eyes, a startled "O" mouth and a wavy tattered hem.
     static func makeDrone() -> SKNode {
         let node = SKNode()
-        let shadow = Effects.groundShadow(width: 30, height: 10)
-        shadow.position = CGPoint(x: 0, y: -20); node.addChild(shadow)
-        let body = roundedRect(size: CGSize(width: 30, height: 18), corner: 8,
-                               color: SKColor(red: 0.35, green: 0.38, blue: 0.46, alpha: 1), stroke: SKColor(white: 0.2, alpha: 1), lineWidth: 1.5)
+        let shadow = Effects.groundShadow(width: 26, height: 9)
+        shadow.position = CGPoint(x: 0, y: -22); node.addChild(shadow)
+        // Faint aura so it reads as floating/spectral.
+        let aura = SKShapeNode(path: ghostPath(w: 36, h: 40))
+        aura.fillColor = Palette.heroRed.withAlphaComponent(0.12); aura.strokeColor = .clear
+        aura.run(.repeatForever(.sequence([.scale(to: 1.08, duration: 0.8), .scale(to: 1.0, duration: 0.8)])))
+        node.addChild(aura)
+        // Ghost body.
+        let body = SKShapeNode(path: ghostPath(w: 30, h: 34))
+        body.fillColor = SKColor(white: 0.95, alpha: 0.95)
+        body.strokeColor = SKColor(white: 0.42, alpha: 1); body.lineWidth = 1.5
         node.addChild(body)
-        let eye = SKShapeNode(circleOfRadius: 5); eye.fillColor = Palette.heroRed; eye.strokeColor = .white; eye.lineWidth = 1
-        eye.glowWidth = 3; node.addChild(eye)
-        for dx in [-18.0, 18.0] {
-            let rotor = SKShapeNode(ellipseOf: CGSize(width: 16, height: 5))
-            rotor.fillColor = SKColor(white: 0.7, alpha: 0.6); rotor.strokeColor = .clear
-            rotor.position = CGPoint(x: dx, y: 8)
-            rotor.run(.repeatForever(.rotate(byAngle: .pi*2, duration: 0.2)))
-            node.addChild(rotor)
+        // Spiral hypnotic eyes.
+        for ex in [-6.5, 6.5] {
+            let spiral = SKShapeNode(path: spiralPath(radius: 4.2, turns: 2.4))
+            spiral.strokeColor = Palette.ink; spiral.lineWidth = 1.3; spiral.fillColor = .clear
+            spiral.lineCap = .round; spiral.position = CGPoint(x: ex, y: 6); node.addChild(spiral)
         }
+        // Startled "O" mouth.
+        let mouth = SKShapeNode(ellipseOf: CGSize(width: 6, height: 8))
+        mouth.fillColor = Palette.ink; mouth.strokeColor = .clear
+        mouth.position = CGPoint(x: 0, y: -5); node.addChild(mouth)
+        // Gentle floating bob.
+        node.run(.repeatForever(.sequence([.moveBy(x: 0, y: 3, duration: 0.7), .moveBy(x: 0, y: -3, duration: 0.7)])))
         node.name = "drone"
         return node
+    }
+
+    /// A classic ghost outline: domed top, vertical sides, wavy hem.
+    private static func ghostPath(w: CGFloat, h: CGFloat) -> CGPath {
+        let p = CGMutablePath(); let hw = w / 2, topY = h / 2, botY = -h / 2
+        p.move(to: CGPoint(x: -hw, y: botY))
+        p.addLine(to: CGPoint(x: -hw, y: topY - hw))
+        p.addArc(center: CGPoint(x: 0, y: topY - hw), radius: hw, startAngle: .pi, endAngle: 0, clockwise: false)
+        p.addLine(to: CGPoint(x: hw, y: botY))
+        let waves = 4, ww = w / CGFloat(waves)
+        for i in 0..<waves {                                  // wavy hem, points hanging down
+            let x1 = hw - CGFloat(i) * ww
+            p.addQuadCurve(to: CGPoint(x: x1 - ww, y: botY), control: CGPoint(x: x1 - ww / 2, y: botY + 7))
+        }
+        p.closeSubpath()
+        return p
+    }
+
+    /// An Archimedean spiral for hypnotic eyes.
+    private static func spiralPath(radius: CGFloat, turns: Double) -> CGPath {
+        let p = CGMutablePath(); let steps = 48
+        for i in 0...steps {
+            let t = Double(i) / Double(steps)
+            let ang = t * turns * 2 * .pi, r = radius * CGFloat(t)
+            let pt = CGPoint(x: cos(ang) * r, y: sin(ang) * r)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        return p
     }
 
     static func makeCrystal() -> SKShapeNode {

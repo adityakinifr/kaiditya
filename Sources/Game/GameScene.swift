@@ -152,6 +152,33 @@ final class GameScene: SKScene {
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
             }
         }
+        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_VIEWLEVEL"], let idx = Int(lv) {
+            // Static level view for art validation: load the level, dismiss the
+            // intro, but DO NOT autopilot — the player never moves, so nothing is
+            // collected or persisted (keeps the save untouched).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.cam.childNode(withName: "titleOverlay")?.removeFromParent()
+                let savedMax = UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked")
+                self.loadLevel(idx)
+                // loadLevel bumps & persists maxUnlocked — restore it so a static
+                // art-preview never unlocks zones in the player's save.
+                self.maxUnlocked = savedMax
+                UserDefaults.standard.set(savedMax, forKey: "kaiditya.maxUnlocked")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    guard let self else { return }
+                    self.cam.childNode(withName: "introOverlay")?.removeFromParent()
+                    if self.state == .intro { self.state = .playing }
+                    // Move the camera onto the enemies (offset clear of hazards).
+                    if let g = self.level.laserGates.first {
+                        self.player.position = CGPoint(x: g.x, y: g.y - 150)
+                    } else if let route = self.level.minionPatrols.first, let m = route.first {
+                        self.player.position = CGPoint(x: m.x, y: m.y - 90)
+                    }
+                    self.cam.position = self.clampedCamera(self.player.position)
+                }
+            }
+        }
         if ProcessInfo.processInfo.environment["KAIDITYA_ARCADE"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.startMinigame()
@@ -475,11 +502,13 @@ final class GameScene: SKScene {
             beam.position = p; beam.zPosition = ZLayer.fx
             beam.run(.repeatForever(.sequence([.fadeAlpha(to: 1, duration: 0.1), .wait(forDuration: 1.1),
                                                .fadeAlpha(to: 0.06, duration: 0.1), .wait(forDuration: 0.9)])))
-            for ex in [-110.0, 110.0] {
-                let emitter = SKShapeNode(circleOfRadius: 9); emitter.fillColor = SKColor(white: 0.28, alpha: 1)
-                emitter.strokeColor = Palette.heroRed; emitter.lineWidth = 2; emitter.position = CGPoint(x: ex, y: 0); beam.addChild(emitter)
-            }
             worldNode.addChild(beam); lasers.append(beam)
+            // Cannon-bots bookend the beam — solid (not children of the blinking beam).
+            for ex in [-110.0, 110.0] {
+                let turret = CharacterFactory.makeLaserTurret(facingRight: ex < 0)
+                turret.position = CGPoint(x: p.x + ex, y: p.y); turret.zPosition = ZLayer.fx + 0.2
+                worldNode.addChild(turret)
+            }
         }
         if let kp = level.keycardPos {
             let k = CharacterFactory.makeKeycard(); k.position = kp; k.zPosition = ZLayer.items
