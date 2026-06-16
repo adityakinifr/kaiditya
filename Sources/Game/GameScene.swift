@@ -1550,7 +1550,10 @@ final class GameScene: SKScene {
             case .complete: cam.childNode(withName: "completeOverlay")?.removeFromParent(); loadLevel(levelIndex + 1); return
             case .won:      cam.childNode(withName: "winOverlay")?.removeFromParent(); showMap(); return
             case .minigame:
-                if mgOver { closeMinigame() } else if !joystick.isActive { joystick.begin(at: camP, touch: t) }
+                if mgOver { closeMinigame() }
+                else if let quit = mgLayer.childNode(withName: "mgQuit"), quit.contains(camP) {
+                    SoundFX.shared.play("tap"); endMinigame()
+                } else if !joystick.isActive { joystick.begin(at: camP, touch: t) }
                 return
             case .playing:  break
             }
@@ -2307,6 +2310,14 @@ final class GameScene: SKScene {
         rim.position = CGPoint(x: 0, y: 13); catcher.addChild(rim)
         catcher.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 90)
         catcher.zPosition = 2; mgLayer.addChild(catcher); mgCatcher = catcher
+
+        // Early-exit button (bottom-left, clear of the catcher) — quitting banks crystals caught so far.
+        let quit = SKShapeNode(circleOfRadius: 22); quit.name = "mgQuit"
+        quit.fillColor = Palette.hudPanel; quit.strokeColor = Palette.heroRed; quit.lineWidth = 1.5
+        quit.position = CGPoint(x: -size.width/2 + 40, y: -size.height/2 + safeBottom + 40); quit.zPosition = 6
+        let qx = SKLabelNode(text: "✕"); qx.fontName = "AvenirNext-Heavy"; qx.fontSize = 20
+        qx.fontColor = .white; qx.verticalAlignmentMode = .center; quit.addChild(qx)
+        mgLayer.addChild(quit)
     }
 
     private func updateMinigame(dt: TimeInterval) {
