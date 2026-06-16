@@ -79,6 +79,10 @@ final class GameScene: SKScene {
     private var questDone = false
     private var questTarget = 5
     private var questProgress = 0
+    // Deliver quest (Granny's pie -> Mayor)
+    private var deliverActive = false
+    private var deliverDone = false
+    private var carriedItem: SKNode?
 
     // Minigame (Crystal Catch)
     private let mgLayer = SKNode()
@@ -284,6 +288,8 @@ final class GameScene: SKScene {
         level = Levels.all[idx]
         inHub = false
         cam.childNode(withName: "dayNight")?.removeFromParent()
+        carriedItem?.removeFromParent(); carriedItem = nil
+        deliverActive = false
 
         // Teardown previous world cleanly (prevents lingering actions/closures).
         removeAction(forKey: "bossLoop")
@@ -1593,6 +1599,8 @@ final class GameScene: SKScene {
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         shopDoor = nil; arcadeDoor = nil; missionsPortal = nil
         coinNodes = []; questActive = false; questDone = false; questProgress = 0
+        deliverActive = false; deliverDone = false
+        carriedItem?.removeFromParent(); carriedItem = nil
         objective = .done
         player.removeFromParent(); player.resetForLevel()
         player.position = level.heroSpawn
@@ -2004,9 +2012,20 @@ final class GameScene: SKScene {
         interactBtn.setEnabled(enabled)
     }
 
+    private func giveCarriedItem(_ glyph: String) {
+        carriedItem?.removeFromParent()
+        let item = SKLabelNode(text: glyph); item.fontSize = 26; item.verticalAlignmentMode = .center
+        item.position = CGPoint(x: 0, y: 58); item.zPosition = ZLayer.fx
+        item.run(.repeatForever(.sequence([.moveBy(x: 0, y: 5, duration: 0.5), .moveBy(x: 0, y: -5, duration: 0.5)])))
+        player.addChild(item); carriedItem = item
+    }
+
     private func updateQuestHUD() {
         refreshQuestMarkers()
-        if questActive {
+        if deliverActive {
+            hud.updateObjective(level: "SIDE-QUEST", title: "Special Delivery",
+                                hint: "Carry Granny's pie to Mayor Mia", progress: "🥧")
+        } else if questActive {
             hud.updateObjective(level: "SIDE-QUEST", title: "Tommy's Coin Rush",
                                 hint: "Collect coins around town, then tell Tommy",
                                 progress: "\(min(questProgress, questTarget))/\(questTarget)")
@@ -2172,16 +2191,44 @@ final class GameScene: SKScene {
             case "tommy":
                 talkTommy()
             case "mayor":
-                showDialogue(speaker: "Mayor Mia", lines: [
-                    "Welcome to Hero City, Kaiditya!",
-                    "Step into the glowing MISSIONS portal to choose a zone to save.",
-                    "Spend the coins you collect at the SHOP for new gadgets!"
-                ])
+                if deliverActive {
+                    showDialogue(speaker: "Mayor Mia", lines: [
+                        "Ooh, Granny's famous pie — and still warm!",
+                        "Thank you, Kaiditya! Here's 10 coins for your trouble. ★"
+                    ]) { [weak self] in
+                        guard let self else { return }
+                        Economy.addCoins(10); self.hud.updateCoins(Economy.coins)
+                        self.deliverActive = false; self.deliverDone = true
+                        self.carriedItem?.removeFromParent(); self.carriedItem = nil
+                        SoundFX.shared.play("powerup")
+                        self.hud.showToast("Pie delivered! +10 coins 🥧", color: Palette.crystal)
+                        self.updateQuestHUD()
+                    }
+                } else {
+                    showDialogue(speaker: "Mayor Mia", lines: [
+                        "Welcome to Hero City, Kaiditya!",
+                        "Step into the glowing MISSIONS portal to choose a zone to save.",
+                        "Spend the coins you collect at the SHOP for new gadgets!"
+                    ])
+                }
             case "gran":
-                showDialogue(speaker: "Granny Gold", lines: [
-                    "Hello dearie! Those coins you find aren't just for show.",
-                    "Buy Swift Boots or a Mega Shield at the SHOP — they really help!"
-                ])
+                if deliverDone {
+                    showDialogue(speaker: "Granny Gold", lines: ["Thank you again for delivering my pie, dearie!"])
+                } else if deliverActive {
+                    showDialogue(speaker: "Granny Gold", lines: ["Hurry now — take that pie to Mayor Mia before it gets cold!"])
+                } else {
+                    showDialogue(speaker: "Granny Gold", lines: [
+                        "Dearie! I baked a pie for Mayor Mia.",
+                        "Would you carry it over to her for me? I'll pay you!"
+                    ]) { [weak self] in
+                        guard let self else { return }
+                        self.deliverActive = true
+                        self.giveCarriedItem("🥧")
+                        SoundFX.shared.play("coin")
+                        self.hud.showToast("Carry the pie to Mayor Mia!", color: Palette.energy)
+                        self.updateQuestHUD()
+                    }
+                }
             default:
                 showDialogue(speaker: npc.displayName, lines: ["Stay super, Kaiditya!"])
             }
@@ -2475,7 +2522,14 @@ final class GameScene: SKScene {
     private func refreshQuestMarkers() {
         for npc in npcs {
             if inHub {
-                npc.setQuestMarker(npc.id == "tommy" && (!questActive && !questDone || questActive && questProgress >= questTarget))
+                let mark: Bool
+                switch npc.id {
+                case "tommy": mark = (!questActive && !questDone) || (questActive && questProgress >= questTarget)
+                case "gran":  mark = !deliverActive && !deliverDone
+                case "mayor": mark = deliverActive
+                default:      mark = false
+                }
+                npc.setQuestMarker(mark)
             } else {
                 npc.setQuestMarker(npc.id == "mayor" && levelIndex == 0)
             }
