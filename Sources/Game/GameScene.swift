@@ -1779,6 +1779,8 @@ final class GameScene: SKScene {
         for p in [CGPoint(x: 300, y: 520), CGPoint(x: 1600, y: 520),
                   CGPoint(x: 300, y: 1150), CGPoint(x: 1600, y: 1150)] { addLamp(at: p) }
         for p in [CGPoint(x: 790, y: 600), CGPoint(x: 1110, y: 600)] { addBench(at: p) }
+        addBalloons(at: CGPoint(x: 1110, y: 720))
+        addBalloons(at: CGPoint(x: 800, y: 720))
 
         // A few decorative townsfolk going about their day (non-interactive).
         let tints: [SKColor] = [SKColor(red:0.9,green:0.7,blue:0.4,alpha:1),
@@ -1840,6 +1842,30 @@ final class GameScene: SKScene {
             spray.particleSpeed = 70; spray.yAcceleration = -120
             spray.position = CGPoint(x: p.x, y: p.y + 6); spray.zPosition = ZLayer.fx; worldNode.addChild(spray)
         }
+    }
+
+    /// A cheerful bunch of balloons on strings that sway gently — pure ambient decor.
+    private func addBalloons(at p: CGPoint) {
+        let colors: [SKColor] = [Palette.heroRed, Palette.energy, Palette.crystal,
+                                 SKColor(red: 0.55, green: 0.4, blue: 0.85, alpha: 1)]
+        let bunch = SKNode(); bunch.position = p; bunch.zPosition = ZLayer.characters + 0.5
+        let offsets: [CGPoint] = [CGPoint(x: -16, y: 96), CGPoint(x: 14, y: 104),
+                                  CGPoint(x: -2, y: 116), CGPoint(x: 24, y: 88)]
+        for (i, off) in offsets.enumerated() {
+            let string = SKShapeNode()
+            let sp = CGMutablePath(); sp.move(to: .zero); sp.addLine(to: off)
+            string.path = sp; string.strokeColor = SKColor(white: 0.85, alpha: 0.5); string.lineWidth = 1
+            bunch.addChild(string)
+            let balloon = SKShapeNode(ellipseOf: CGSize(width: 26, height: 32))
+            balloon.fillColor = colors[i]; balloon.strokeColor = colors[i].darker; balloon.lineWidth = 1.5
+            balloon.position = off
+            let hi = SKShapeNode(circleOfRadius: 4); hi.fillColor = SKColor(white: 1, alpha: 0.4)
+            hi.strokeColor = .clear; hi.position = CGPoint(x: -6, y: 8); balloon.addChild(hi)
+            bunch.addChild(balloon)
+        }
+        let sway = SKAction.sequence([.rotate(byAngle: 0.06, duration: 1.4), .rotate(byAngle: -0.06, duration: 1.4)])
+        bunch.run(.repeatForever(sway))
+        worldNode.addChild(bunch)
     }
 
     private func addBench(at p: CGPoint) {
