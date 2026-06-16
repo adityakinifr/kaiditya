@@ -916,6 +916,22 @@ final class GameScene: SKScene {
 
     private func positionOverlay(_ node: SKNode) { node.position = .zero }
 
+    private func addMuteButton(to overlay: SKNode) {
+        let b = SKNode(); b.name = "muteButton"; b.zPosition = 50
+        b.position = CGPoint(x: size.width/2 - 40, y: size.height/2 - safeTop - 30)
+        let circ = SKShapeNode(circleOfRadius: 22)
+        circ.fillColor = Palette.hudPanel; circ.strokeColor = Palette.hudAccent; circ.lineWidth = 1.5; b.addChild(circ)
+        let icon = SKLabelNode(text: SoundFX.shared.muted ? "🔇" : "🔊")
+        icon.name = "muteIcon"; icon.fontSize = 22; icon.verticalAlignmentMode = .center; b.addChild(icon)
+        overlay.addChild(b)
+    }
+
+    private func toggleMute(in overlay: SKNode?) {
+        let muted = SoundFX.shared.toggleMute()
+        (overlay?.childNode(withName: "//muteIcon") as? SKLabelNode)?.text = muted ? "🔇" : "🔊"
+        if !muted { SoundFX.shared.play("tap") }
+    }
+
     /// Radial light rays behind a card for a dramatic reveal.
     private func rayBurst(accent: SKColor) -> SKNode {
         let node = SKNode()
@@ -999,6 +1015,7 @@ final class GameScene: SKScene {
         card.addChild(play)
 
         dramatize(card, in: overlay, accent: Palette.energy)
+        addMuteButton(to: overlay)
         cam.addChild(overlay)
         positionOverlay(overlay)
     }
@@ -1064,6 +1081,7 @@ final class GameScene: SKScene {
         let hint = SKLabelNode(text: "tap a zone to play")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
         hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 70); overlay.addChild(hint)
+        addMuteButton(to: overlay)
 
         // SHOP button
         let shop = roundedRect(size: CGSize(width: 180, height: 44), corner: 14, color: Palette.energy.darker)
@@ -1182,6 +1200,10 @@ final class GameScene: SKScene {
     }
 
     private func handleMapTap(_ camP: CGPoint) {
+        if let overlay = cam.childNode(withName: "mapOverlay"),
+           let mb = overlay.childNode(withName: "muteButton"), mb.contains(cam.convert(camP, to: overlay)) {
+            toggleMute(in: overlay); return
+        }
         if let shop = cam.childNode(withName: "//shopButton"), shop.contains(cam.convert(camP, to: shop.parent!)) {
             cam.childNode(withName: "mapOverlay")?.removeFromParent(); shopFromHub = false; showShop(); return
         }
@@ -1458,7 +1480,12 @@ final class GameScene: SKScene {
             let p = t.location(in: self)
             let camP = t.location(in: cam)
             switch state {
-            case .title:    startGame(); return
+            case .title:
+                if let overlay = cam.childNode(withName: "titleOverlay"),
+                   let mb = overlay.childNode(withName: "muteButton"), mb.contains(cam.convert(camP, to: overlay)) {
+                    toggleMute(in: overlay)
+                } else { startGame() }
+                return
             case .map:      handleMapTap(camP); return
             case .shop:     handleShopTap(camP); return
             case .intro:    dismissIntro(); return

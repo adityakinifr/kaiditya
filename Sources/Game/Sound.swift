@@ -15,13 +15,28 @@ final class SoundFX {
     private var music: [String: AVAudioPlayer] = [:]
     private var currentMusic = ""
     var musicEnabled = true
+    private(set) var muted = false
 
     private init() {
+        muted = UserDefaults.standard.bool(forKey: "kaiditya.muted")
+        enabled = !muted
+        musicEnabled = !muted
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, options: [.mixWithOthers])
         try? session.setActive(true)
         buildAll()
         buildMusicAll()
+    }
+
+    /// Toggle global mute (SFX + music), persisted. Returns the new muted state.
+    @discardableResult
+    func toggleMute() -> Bool {
+        muted.toggle()
+        UserDefaults.standard.set(muted, forKey: "kaiditya.muted")
+        enabled = !muted
+        musicEnabled = !muted
+        if muted { stopMusic() } else { playMusic("menu") }
+        return muted
     }
 
     func warmUp() {}   // touching .shared triggers init/synthesis
