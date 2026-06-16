@@ -394,15 +394,32 @@ enum CharacterFactory {
         return node
     }
 
-    /// A wall-mounted searchlight base (for the rotating searchlight hazard).
+    /// A rotating sentry turret that casts the searchlight cone — matches the
+    /// kid's-sketchbook cannon-bots: boxed metal housing, corner bolts and a
+    /// big glowing red scanning eye.
     static func makeSearchlightBase() -> SKNode {
         let node = SKNode()
-        let base = SKShapeNode(circleOfRadius: 16)
-        base.fillColor = SKColor(white: 0.28, alpha: 1); base.strokeColor = SKColor(white: 0.5, alpha: 1); base.lineWidth = 2
-        node.addChild(base)
-        let lens = SKShapeNode(circleOfRadius: 8)
-        lens.fillColor = Palette.energy; lens.strokeColor = .white; lens.lineWidth = 1; lens.glowWidth = 3
+        let metal = SKColor(white: 0.30, alpha: 1)
+        // Boxed housing.
+        let housing = roundedRect(size: CGSize(width: 30, height: 26), corner: 7,
+                                  color: metal, stroke: Palette.heroRed, lineWidth: 2)
+        node.addChild(housing)
+        // Corner bolts.
+        for c in [CGPoint(x: -10, y: 8), CGPoint(x: 10, y: 8), CGPoint(x: -10, y: -8), CGPoint(x: 10, y: -8)] {
+            let b = SKShapeNode(circleOfRadius: 1.8); b.fillColor = metal.darker; b.strokeColor = .clear
+            b.position = c; housing.addChild(b)
+        }
+        // Scanning eye socket + glowing red lens (the cone's source).
+        let socket = SKShapeNode(circleOfRadius: 9)
+        socket.fillColor = Palette.ink; socket.strokeColor = SKColor(white: 0.5, alpha: 1); socket.lineWidth = 1.5
+        node.addChild(socket)
+        let lens = SKShapeNode(circleOfRadius: 5)
+        lens.fillColor = Palette.heroRed; lens.strokeColor = .white; lens.lineWidth = 1; lens.glowWidth = 4
         node.addChild(lens)
+        lens.run(.repeatForever(.sequence([.fadeAlpha(to: 0.5, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
+        // Bright pupil for a watchful look.
+        let pupil = SKShapeNode(circleOfRadius: 1.6); pupil.fillColor = .white; pupil.strokeColor = .clear
+        node.addChild(pupil)
         return node
     }
 
