@@ -161,6 +161,13 @@ final class GameScene: SKScene {
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
             }
         }
+        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_PLAYLEVEL"], let idx = Int(lv) {
+            // Jump straight into a level for real play (normal flow: intro → controls).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.cam.childNode(withName: "titleOverlay")?.removeFromParent()
+                self?.loadLevel(idx)
+            }
+        }
         if let lv = ProcessInfo.processInfo.environment["KAIDITYA_VIEWLEVEL"], let idx = Int(lv) {
             // Static level view for art validation: load the level, dismiss the
             // intro, but DO NOT autopilot — the player never moves, so nothing is
