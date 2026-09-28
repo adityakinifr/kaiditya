@@ -8,14 +8,22 @@ cd "$(dirname "$0")/.."
 if [ -n "${BUILD:-}" ]; then
   sed -i '' "s/CURRENT_PROJECT_VERSION: \".*\"/CURRENT_PROJECT_VERSION: \"$BUILD\"/" project.yml
 fi
+mkdir -p build
+LOG=build/archive.log
 xcodegen generate >/dev/null
+echo "Archiving (full log: $LOG)..."
 xcodebuild -project Kaiditya.xcodeproj -scheme Kaiditya -configuration Release \
   -destination 'generic/platform=iOS' -archivePath build/Kaiditya.xcarchive \
-  -allowProvisioningUpdates archive | grep -E "error:|warning: .*sign|ARCHIVE (SUCCEEDED|FAILED)"
+  -allowProvisioningUpdates archive > "$LOG" 2>&1 || { grep -E "error:" "$LOG" | tail -20; echo "ARCHIVE FAILED - see $LOG"; exit 1; }
+echo "Archive succeeded."
 OPTS=scripts/ExportOptions.plist
 if [ "${1:-}" = "--upload" ]; then
   OPTS=$(mktemp -t export).plist
   sed 's#<string>export</string>#<string>upload</string>#' scripts/ExportOptions.plist > "$OPTS"
 fi
+echo "$([ "${1:-}" = --upload ] && echo Uploading || echo Exporting) (full log: build/export.log)..."
 xcodebuild -exportArchive -archivePath build/Kaiditya.xcarchive -exportOptionsPlist "$OPTS" \
-  -exportPath build/export -allowProvisioningUpdates | grep -E "error:|EXPORT (SUCCEEDED|FAILED)|Upload"
+  -exportPath build/export -allowProvisioningUpdates > build/export.log 2>&1 \
+  || { grep -iE "error" build/export.log | tail -20; echo "EXPORT/UPLOAD FAILED - see build/export.log"; exit 1; }
+grep -E "EXPORT SUCCEEDED|Upload|uploaded" build/export.log || true
+echo "Done."
