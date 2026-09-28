@@ -17,10 +17,12 @@ art/
     vehicles.py         # hero car, traffic cars, villain truck, hero boat, villain speedboat, barge
     props.py            # world props (crates, bushes, tree, cage, generator, pickups ...) + shadow passes
     tiles.py            # seamless biome floor tiles, path tiles, scatter decals
+    buildings.py        # 3/4 buildings (houses, shop, arcade, HQ, warehouse, lab, ...) + shadow passes
     envkit.py           # AO band, Cycles shadow-catcher pass (shared by props/tiles)
     hero_poc.py         # original proof of concept (kept for reference, not built)
   tools/finish.py       # 2x -> 1x Lanczos downsample + contact sheets (needs Pillow)
   tools/props_post.py   # crop props, compute anchorPoints, write props_manifest.json + previews/props.png
+  tools/buildings_post.py # downsample + crop buildings, anchors, sign/door offsets -> buildings_manifest.json + previews/buildings.png
   tools/tiles_post.py   # seamless wrap-downsample of tiles -> tiles_<biome>.atlas + previews/tiles*.png
   props_manifest.json   # generated: prop textures, sizes, anchors, footprints; tile names per biome
   previews/             # <asset>_sheet.png contact sheets for review
@@ -184,3 +186,20 @@ in world rest-pose coordinates, facing -Y and standing on z=0. Parent them to pi
   `<biome>_path_0..1` (walkway strip), `<biome>_decal_*` (transparent scatter). Tiles are
   233x133 px = 70x40 pt at worldScale 0.3 (`SKTileMapNode` tileSize). The 3x3/5x5 seam checks
   are in `art/previews/tiles_check_<biome>.png`.
+
+## Buildings (`art/build_all.sh buildings`)
+
+* **buildings** -> `Resources/Sprites/buildings.atlas`: `bld_house_{blue,red,green,orange,purple}`,
+  `bld_shop`, `bld_arcade`, `bld_hq`, `bld_warehouse`, `bld_lab`, `bld_pumphouse`, `bld_rooftop`,
+  `bld_lair`, `bld_bunker` (canonical footprint 200x150 pt) and `bld_fortress` (400x220 pt), each
+  with a `<name>_shadow`. Rendered whole from the character camera (55deg, ~116 px/unit); only the
+  front face and the roof show.
+* Footprint: a W x H pt spec (H = on-screen depth) is modelled as W/(0.3*PPU) x H/(0.3*PPU*cos55)
+  units, so the ground rect projects to exactly W x H pt at scale 0.3 (same convention as the props'
+  `footprint_pt`). For other spec sizes scale the node uniformly by `0.3 * specW / footprint_pt[0]`.
+* `art/buildings_manifest.json`: `anchor` (ground-footprint centre; same for the shadow),
+  `sign_center_pt` / `sign_size_pt` (blank light plate for a SpriteKit label, dark text reads best),
+  `door_pt` (threshold, bottom centre of the door) and `door_top_pt`, all in points from the node
+  position at scale 0.3. Multiply offsets by `scale / 0.3` when a building is scaled.
+* Renders use `dither_intensity = 0` (flat fills compress ~3x better), and shadows are lightly
+  blurred and snapped to 32 alpha levels, so the atlas stays around 5 MB.

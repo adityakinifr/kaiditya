@@ -120,45 +120,66 @@ enum ControlIcons {
     }
 }
 
-/// A round touch button with a vector icon and a title label.
+/// A round touch button with a vector icon and a title label, skinned as a toon "toy"
+/// disc: 3 pt ink outline, darker bevel rim, flat drop shadow and a glossy top highlight.
+/// The disc is a pre-rendered texture (up / pressed / disabled); the hit area is an
+/// invisible circle of the original radius, so tap targets are unchanged.
 final class GameButton: SKNode {
     let key: String
-    private let bg: SKShapeNode
-    private let ring: SKShapeNode
+    private let bg: SKShapeNode          // invisible hit area (same geometry as before)
+    private let disc: SKSpriteNode
+    private let face = SKNode()          // icon + cooldown sweep; shifts down when pressed
+    private let sweep = SKShapeNode()
     private let label: RichLabel
     private var icon: SKNode
     private var iconKey: String
+    private let color: SKColor
+    private let radius: CGFloat
+    private let depth: CGFloat = 3
+    private var sweepStep = -1
     private(set) var enabled = true
 
     init(key: String, glyph: String = "", title: String, color: SKColor, radius: CGFloat = 40) {
         self.key = key
+        self.color = color
+        self.radius = radius
         bg = SKShapeNode(circleOfRadius: radius)
-        ring = SKShapeNode(circleOfRadius: radius)
+        disc = SKSpriteNode(texture: ToonArt.disc(color: color, radius: radius, depth: 3))
         label = RichLabel(text: title)
         icon = ControlIcons.make(key)
         iconKey = key
         super.init()
 
-        bg.fillColor = color.withAlphaComponent(0.92)
+        bg.fillColor = .clear
         bg.strokeColor = .clear
         bg.zPosition = ZLayer.hud
         addChild(bg)
 
-        ring.fillColor = .clear
-        ring.strokeColor = SKColor(white: 1, alpha: 0.9)
-        ring.lineWidth = 2.5
-        ring.zPosition = ZLayer.hud + 0.5
-        addChild(ring)
+        let lift = ToonArt.discFaceOffset(depth: depth)
+        disc.position = CGPoint(x: 0, y: -lift)       // face center lands on the node origin
+        disc.zPosition = ZLayer.hud
+        addChild(disc)
 
-        icon.zPosition = ZLayer.hud + 1
+        face.zPosition = ZLayer.hud + 1
+        addChild(face)
+
+        sweep.fillColor = Palette.ink.withAlphaComponent(0.5)
+        sweep.strokeColor = .clear
+        sweep.zPosition = 0.5
+        sweep.isHidden = true
+        face.addChild(sweep)
+
+        icon.zPosition = 1
         icon.setScale(radius / 38)
-        addChild(icon)
+        face.addChild(icon)
 
-        label.fontName = "AvenirNext-Bold"
-        label.fontSize = 11
+        label.fontName = Theme.display
+        label.fontSize = 13
         label.fontColor = .white
+        label.shadowColor = Palette.ink.withAlphaComponent(0.85)
+        label.shadowOffset = CGVector(dx: 0, dy: -1.5)
         label.verticalAlignmentMode = .center
-        label.position = CGPoint(x: 0, y: -radius - 11)
+        label.position = CGPoint(x: 0, y: -radius - depth - 11)
         label.zPosition = ZLayer.hud + 1
         addChild(label)
 
@@ -168,8 +189,30 @@ final class GameButton: SKNode {
     required init?(coder: NSCoder) { fatalError() }
 
     func setEnabled(_ on: Bool) {
+        guard on != enabled else { return }
         enabled = on
-        alpha = on ? 1.0 : 0.34
+        disc.texture = ToonArt.disc(color: color, radius: radius, state: on ? .up : .off, depth: depth)
+        icon.alpha = on ? 1 : 0.55
+        disc.alpha = on ? 1 : 0.8
+        label.alpha = on ? 1 : 0.6
+        if on { setCooldown(0) }
+    }
+
+    /// Radial cooldown sweep over the face: 1 = fully locked, 0 = ready (hidden).
+    func setCooldown(_ frac: CGFloat) {
+        let f = max(0, min(1, frac))
+        let step = Int((f * 48).rounded(.up))
+        guard step != sweepStep else { return }
+        sweepStep = step
+        guard step > 0 else { sweep.isHidden = true; return }
+        let r = radius - 2
+        let p = CGMutablePath()
+        p.move(to: .zero)
+        let start = CGFloat.pi / 2
+        p.addArc(center: .zero, radius: r, startAngle: start, endAngle: start + 2 * .pi * CGFloat(step) / 48, clockwise: false)
+        p.closeSubpath()
+        sweep.path = p
+        sweep.isHidden = false
     }
 
     func setTitle(_ t: String) { if label.text != t { label.text = t } }
@@ -178,21 +221,28 @@ final class GameButton: SKNode {
     func setIcon(_ key: String) {
         guard key != iconKey else { return }
         iconKey = key
-        let scale = icon.xScale
+        let scale = icon.xScale, a = icon.alpha
         icon.removeFromParent()
-        icon = ControlIcons.make(key); icon.zPosition = ZLayer.hud + 1; icon.setScale(scale)
-        addChild(icon)
+        icon = ControlIcons.make(key); icon.zPosition = 1; icon.setScale(scale); icon.alpha = a
+        face.addChild(icon)
     }
 
     func press() {
         guard enabled else { return }
         Haptics.tap()
-        bg.run(.sequence([.scale(to: 0.86, duration: 0.05), .scale(to: 1.0, duration: 0.08)]))
+        // Pressed: the face drops onto the rim (rim hidden), then springs back.
+        let up = ToonArt.disc(color: color, radius: radius, state: .up, depth: depth)
+        let down = ToonArt.disc(color: color, radius: radius, state: .down, depth: depth)
+        disc.removeAction(forKey: "press"); face.removeAction(forKey: "press")
+        disc.texture = down; face.position.y = -depth
+        disc.run(.sequence([.wait(forDuration: 0.11), .setTexture(up)]), withKey: "press")
+        face.run(.sequence([.wait(forDuration: 0.11), .moveTo(y: 0, duration: 0.05)]), withKey: "press")
         // quick ring flash for feedback
-        let flash = SKShapeNode(circleOfRadius: bg.frame.width/2)
+        let flash = SKShapeNode(circleOfRadius: radius + 1)
         flash.strokeColor = .white; flash.lineWidth = 3; flash.fillColor = .clear
+        flash.position.y = -depth
         flash.zPosition = ZLayer.hud + 2; addChild(flash)
-        flash.run(.sequence([.group([.scale(to: 1.5, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+        flash.run(.sequence([.group([.scale(to: 1.4, duration: 0.22), .fadeOut(withDuration: 0.22)]), .removeFromParent()]))
     }
 
     func contains(scenePoint: CGPoint, in scene: SKScene) -> Bool {
