@@ -58,6 +58,32 @@ enum Effects {
         e.run(.sequence([.wait(forDuration: 0.9), .removeFromParent()]))
     }
 
+    /// Animated cartoon water: two interfering wave bands, bright caustic ridges, slow drift.
+    /// Works as an SKShapeNode fillShader or an SKSpriteNode shader. `size` in points sets wave scale.
+    static func waterShader(size: CGSize, murky: Bool = false) -> SKShader {
+        let src = """
+        void main() {
+            vec2 px = v_tex_coord * u_size;
+            vec2 uv = px / 90.0;
+            float t = u_time;
+            float w1 = sin(uv.x * 2.6 + t * 1.2 + sin(uv.y * 1.9 + t * 0.6) * 1.6);
+            float w2 = sin(uv.y * 3.4 - t * 0.9 + sin(uv.x * 1.4 - t * 0.45) * 1.3);
+            float ridge = smoothstep(0.62, 0.98, w1 * w2);
+            float band = 0.5 + 0.25 * w1 + 0.15 * w2;
+            vec3 col = mix(u_deep.rgb, u_shallow.rgb, band);
+            col += ridge * 0.30;
+            float a = 0.9;
+            gl_FragColor = vec4(col * a, a);
+        }
+        """
+        let sh = SKShader(source: src, uniforms: [
+            SKUniform(name: "u_size", vectorFloat2: vector_float2(Float(size.width), Float(size.height))),
+            SKUniform(name: "u_deep", vectorFloat4: murky ? vector_float4(0.18, 0.34, 0.33, 1) : vector_float4(0.16, 0.42, 0.66, 1)),
+            SKUniform(name: "u_shallow", vectorFloat4: murky ? vector_float4(0.30, 0.50, 0.44, 1) : vector_float4(0.34, 0.66, 0.86, 1)),
+        ])
+        return sh
+    }
+
     /// Radial falloff blob, white with alpha (tinted per use).
     static let shadowTex: SKTexture = {
         let n = 64

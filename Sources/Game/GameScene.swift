@@ -532,7 +532,8 @@ final class GameScene: SKScene {
         waterRects = level.waterRects
         for r in waterRects {
             let w = SKShapeNode(rect: r, cornerRadius: 14); w.name = "water"
-            w.fillColor = Palette.water.withAlphaComponent(0.62); w.strokeColor = Palette.water.darker; w.lineWidth = 3
+            w.fillColor = .white; w.fillShader = Effects.waterShader(size: r.size, murky: biome.tileKey == "sewers")
+            w.strokeColor = SKColor(red: 0.85, green: 0.95, blue: 1, alpha: 0.75); w.lineWidth = 5   // foam edge
             w.zPosition = ZLayer.pathDeco; worldNode.addChild(w)
         }
         for p in level.coinSpots {
@@ -924,6 +925,7 @@ final class GameScene: SKScene {
     private func buildDrivingWorld() {
         // Base: grass for road, deep water for the boat channel.
         let grass = SKSpriteNode(color: level.isBoat ? Palette.water.darker : biome.treeFill, size: worldSize)
+        if level.isBoat { grass.shader = Effects.waterShader(size: worldSize) }
         grass.position = CGPoint(x: worldSize.width/2, y: worldSize.height/2)
         grass.zPosition = ZLayer.ground
         worldNode.addChild(grass)
@@ -1037,7 +1039,8 @@ final class GameScene: SKScene {
 
     private func addPond(at p: CGPoint) {
         let pond = SKShapeNode(ellipseOf: CGSize(width: 130, height: 90))
-        pond.fillColor = Palette.water; pond.strokeColor = Palette.water.darker; pond.lineWidth = 3
+        pond.fillColor = .white; pond.fillShader = Effects.waterShader(size: CGSize(width: 130, height: 90))
+        pond.strokeColor = SKColor(red: 0.85, green: 0.95, blue: 1, alpha: 0.8); pond.lineWidth = 4
         pond.position = p; pond.zPosition = ZLayer.decals
         worldNode.addChild(pond)
     }
@@ -2099,7 +2102,8 @@ final class GameScene: SKScene {
         basin.fillColor = SKColor(white: 0.75, alpha: 1); basin.strokeColor = SKColor(white: 0.55, alpha: 1); basin.lineWidth = 4
         basin.position = p; basin.zPosition = ZLayer.decals; worldNode.addChild(basin)
         let water = SKShapeNode(circleOfRadius: 54)
-        water.fillColor = Palette.water; water.strokeColor = Palette.water.darker; water.lineWidth = 2
+        water.fillColor = .white; water.fillShader = Effects.waterShader(size: CGSize(width: 108, height: 108))
+        water.strokeColor = SKColor(white: 0.85, alpha: 1); water.lineWidth = 4
         water.position = p; water.zPosition = ZLayer.decals + 0.5; worldNode.addChild(water)
         let column = SKShapeNode(circleOfRadius: 14)
         column.fillColor = SKColor(white: 0.8, alpha: 1); column.strokeColor = SKColor(white: 0.6, alpha: 1)
