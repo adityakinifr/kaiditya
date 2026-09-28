@@ -202,10 +202,11 @@ enum GlyphIcon: String, CaseIterable {
 /// Drop-in replacement for SKLabelNode that renders emoji/symbols as GlyphIcons.
 /// Every property setter re-lays out, so call sites can set text/font in any order.
 final class RichLabel: SKNode {
-    var text: String? { didSet { relayout() } }
-    var fontName: String? = "AvenirNext-Bold" { didSet { relayout() } }
-    var fontSize: CGFloat = 32 { didSet { relayout() } }
-    var fontColor: SKColor? = .white { didSet { relayout() } }
+    // Setters skip the (costly) relayout when the value didn't change — HUD/enemy marks set these every frame.
+    var text: String? { didSet { if text != oldValue { relayout() } } }
+    var fontName: String? = "AvenirNext-Bold" { didSet { if fontName != oldValue { relayout() } } }
+    var fontSize: CGFloat = 32 { didSet { if fontSize != oldValue { relayout() } } }
+    var fontColor: SKColor? = .white { didSet { if fontColor != oldValue { relayout() } } }
     var horizontalAlignmentMode: SKLabelHorizontalAlignmentMode = .center { didSet { relayout() } }
     var verticalAlignmentMode: SKLabelVerticalAlignmentMode = .baseline { didSet { relayout() } }
 

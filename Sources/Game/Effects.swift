@@ -1,24 +1,86 @@
 import SpriteKit
+import UIKit
 
 /// Reusable visual flourishes: shadows, atmosphere overlays, vignette,
 /// ambient particle systems, and the level exit portal.
 enum Effects {
 
     /// Soft elliptical ground shadow placed beneath a character.
-    static func groundShadow(width: CGFloat = 34, height: CGFloat = 12) -> SKShapeNode {
-        let s = SKShapeNode(ellipseOf: CGSize(width: width, height: height))
-        s.fillColor = SKColor(white: 0, alpha: 0.22)
-        s.strokeColor = .clear
+    /// Soft violet contact shadow (one shared texture, so shadows batch into a single draw call).
+    static func groundShadow(width: CGFloat = 34, height: CGFloat = 12) -> SKSpriteNode {
+        let s = SKSpriteNode(texture: shadowTex, size: CGSize(width: width * 1.25, height: height * 1.35))
+        s.color = Palette.shadowTint; s.colorBlendFactor = 1
         s.zPosition = -2
         return s
     }
 
+    /// Height/width ratio of the cone texture for a given half-angle.
+    static func coneAspect(halfAngle: CGFloat) -> CGFloat { 2 * sin(halfAngle) }
+
+    private static var coneCache: [CGFloat: SKTexture] = [:]
+    /// Soft vision wedge (white; tinted per enemy): bright core near the apex, a lit rim at the
+    /// range edge, fading sides. Apex at left-centre, pointing +x. Matches `Minion.canSee` exactly.
+    static func coneTex(halfAngle ha: CGFloat) -> SKTexture {
+        if let t = coneCache[ha] { return t }
+        let w: CGFloat = 256, h = w * coneAspect(halfAngle: ha)
+        let img = UIGraphicsImageRenderer(size: CGSize(width: w, height: h)).image { ctx in
+            let cg = ctx.cgContext
+            let apex = CGPoint(x: 0, y: h / 2)
+            let wedge = CGMutablePath()
+            wedge.move(to: apex)
+            wedge.addArc(center: apex, radius: w - 1, startAngle: -ha, endAngle: ha, clockwise: false)
+            wedge.closeSubpath()
+            cg.saveGState(); cg.addPath(wedge); cg.clip()
+            let colors = [UIColor(white: 1, alpha: 0.42).cgColor, UIColor(white: 1, alpha: 0.26).cgColor,
+                          UIColor(white: 1, alpha: 0.14).cgColor, UIColor(white: 1, alpha: 0.30).cgColor] as CFArray
+            let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.45, 0.9, 1])!
+            cg.drawRadialGradient(g, startCenter: apex, startRadius: 0, endCenter: apex, endRadius: w, options: [])
+            cg.restoreGState()
+            cg.setStrokeColor(UIColor(white: 1, alpha: 0.35).cgColor); cg.setLineWidth(2)
+            cg.addPath(wedge); cg.strokePath()
+        }
+        let t = SKTexture(image: img); coneCache[ha] = t
+        return t
+    }
+
+    /// One-shot sparkle burst (pickups, hits). Uses the shared soft texture; removes itself.
+    static func burst(at p: CGPoint, color: SKColor, count: Int = 14, speed: CGFloat = 150, in parent: SKNode) {
+        let e = SKEmitterNode()
+        e.particleTexture = shadowTex
+        e.numParticlesToEmit = count; e.particleBirthRate = 2000
+        e.particleLifetime = 0.45; e.particleLifetimeRange = 0.2
+        e.emissionAngleRange = .pi * 2; e.particleSpeed = speed; e.particleSpeedRange = speed * 0.5
+        e.particleScale = 0.22; e.particleScaleRange = 0.1; e.particleScaleSpeed = -0.4
+        e.particleAlphaSpeed = -2.0
+        e.particleColor = color; e.particleColorBlendFactor = 1; e.particleBlendMode = .add
+        e.position = p; e.zPosition = ZLayer.fx
+        parent.addChild(e)
+        e.run(.sequence([.wait(forDuration: 0.9), .removeFromParent()]))
+    }
+
+    /// Radial falloff blob, white with alpha (tinted per use).
+    static let shadowTex: SKTexture = {
+        let n = 64
+        let img = UIGraphicsImageRenderer(size: CGSize(width: n, height: n)).image { ctx in
+            let colors = [UIColor(white: 1, alpha: 0.55).cgColor, UIColor(white: 1, alpha: 0.4).cgColor,
+                          UIColor(white: 1, alpha: 0).cgColor] as CFArray
+            let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 0.55, 1])!
+            let c = CGPoint(x: n / 2, y: n / 2)
+            ctx.cgContext.drawRadialGradient(g, startCenter: c, startRadius: 0, endCenter: c, endRadius: CGFloat(n) / 2, options: [])
+        }
+        return SKTexture(image: img)
+    }()
+
     /// Full-screen tint overlay for time-of-day (parented to the camera).
     static func ambientOverlay(color: SKColor, alpha: CGFloat) -> SKSpriteNode {
-        let n = SKSpriteNode(color: color, size: CGSize(width: 4000, height: 4000))
-        n.alpha = alpha
+        // Multiply by a white→tint blend: darkens and colours the scene without greying it out.
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let k = min(0.45, alpha * 1.0)
+        let tint = SKColor(red: 1 - k + r * k, green: 1 - k + g * k, blue: 1 - k + b * k, alpha: 1)
+        let n = SKSpriteNode(color: tint, size: CGSize(width: 4000, height: 4000))
         n.colorBlendFactor = 1
-        n.blendMode = .alpha
+        n.blendMode = .multiply
         n.zPosition = ZLayer.fx + 1
         return n
     }

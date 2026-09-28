@@ -212,11 +212,11 @@ enum Biomes {
         buildingWall: SKColor(red: 0.30, green: 0.16, blue: 0.26, alpha: 1),
         signColor: SKColor(red: 1.0, green: 0.35, blue: 0.55, alpha: 1),
         ambientColor: SKColor(red: 0.12, green: 0.02, blue: 0.10, alpha: 1),
-        ambientAlpha: 0.5,
+        ambientAlpha: 0.22,
         accent: SKColor(red: 1.0, green: 0.40, blue: 0.70, alpha: 1),
         coverShape: .pillar,
         ambientFX: .sparks,
-        vignette: 0.52)
+        vignette: 0.28)
 
     static let tower = Biome(
         groundA: SKColor(red: 0.21, green: 0.18, blue: 0.32, alpha: 1),
@@ -632,7 +632,7 @@ enum Levels {
         dronesStyle: true,
         grappleAnchors: [CGPoint(x: 1200, y: 1100), CGPoint(x: 1900, y: 1100),
                          CGPoint(x: 2500, y: 1100), CGPoint(x: 2900, y: 1100)],
-        hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1700)])
+        hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1560)])
 
     static let powerplant = LevelData(
         index: 10,

@@ -6,6 +6,7 @@ enum Palette {
     static let grassDark  = SKColor(red: 0.38, green: 0.66, blue: 0.36, alpha: 1)
     static let path       = SKColor(red: 0.86, green: 0.78, blue: 0.58, alpha: 1)
     static let water      = SKColor(red: 0.40, green: 0.66, blue: 0.86, alpha: 1)
+    static let shadowTint = SKColor(red: 0.20, green: 0.16, blue: 0.36, alpha: 1)   // cool violet, never black
 
     static let heroBlue   = SKColor(red: 0.20, green: 0.45, blue: 0.95, alpha: 1)
     static let heroRed    = SKColor(red: 0.94, green: 0.28, blue: 0.30, alpha: 1)
@@ -36,6 +37,12 @@ enum ZLayer {
     static let buildings: CGFloat = 8
     static let characters: CGFloat = 10
     static let coverTops: CGFloat  = 14   // bush/tree canopy drawn above characters
+
+    /// Y-sorted depth band (10…13.9) for characters and solid props: lower on screen = drawn in front.
+    /// Children of a sorted node use small relative offsets (0…1); cones/marks compensate explicitly.
+    static func depth(_ y: CGFloat, worldHeight h: CGFloat) -> CGFloat {
+        characters + 3.9 * (1 - min(max(y / max(h, 1), 0), 1))
+    }
     static let fx: CGFloat       = 18
     static let hud: CGFloat      = 100
     static let overlay: CGFloat  = 200

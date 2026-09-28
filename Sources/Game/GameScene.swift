@@ -1,4 +1,5 @@
 import SpriteKit
+import StoreKit
 
 final class GameScene: SKScene {
 
@@ -74,6 +75,7 @@ final class GameScene: SKScene {
     private var grappleAnchorNodes: [SKNode] = []
     private var grappleTarget: SKNode?
     private var grappling = false
+    private var lastMoveDir = CGVector(dx: 0, dy: 1)
 
     // Progression / map
     private var maxUnlocked = 0
@@ -126,7 +128,11 @@ final class GameScene: SKScene {
     // Flow
     private enum State { case title, map, shop, intro, tour, playing, dialogue, complete, won, minigame }
     private var tourStep = 0
-    private var state: State = .title
+    private var state: State = .title {
+        // Reading an intro card or dialogue freezes the level (lasers, patrols, boss actions),
+        // so text never costs the player time or a heart.
+        didSet { worldNode.isPaused = state == .intro || state == .dialogue }
+    }
     private var lastUpdate: TimeInterval = 0
     private var nearestInteract: (() -> Void)?
     private var safeTop: CGFloat = 0
@@ -559,11 +565,21 @@ final class GameScene: SKScene {
             let beam = SKShapeNode(rectOf: CGSize(width: 220, height: 10), cornerRadius: 5)
             beam.fillColor = Palette.heroRed.withAlphaComponent(0.85); beam.strokeColor = Palette.heroRed; beam.glowWidth = 6
             beam.position = p; beam.zPosition = ZLayer.fx
-            // Later levels: beam stays on longer and the safe gap shrinks.
-            let onTime = 1.1 + Double(levelIndex) * 0.04
-            let offTime = max(0.5, 0.9 - Double(levelIndex) * 0.035)
-            beam.run(.repeatForever(.sequence([.fadeAlpha(to: 1, duration: 0.1), .wait(forDuration: onTime),
-                                               .fadeAlpha(to: 0.06, duration: 0.1), .wait(forDuration: offTime)])))
+            // Explicit cycle: ON (deadly) → OFF (safe) → 0.4s amber WARNING → ON. Collision reads `live`,
+            // never the fade. Later levels stay on a little longer with a slightly shorter gap.
+            let step = Double(max(0, levelIndex - 4))
+            let onTime = 1.1 + step * 0.05, offTime = max(0.9, 1.1 - step * 0.035), warn = 0.4
+            beam.userData = ["live": true]
+            let red = Palette.heroRed, amber = SKColor(red: 1, green: 0.7, blue: 0.15, alpha: 1)
+            beam.run(.repeatForever(.sequence([
+                .run { beam.userData?["live"] = true; beam.fillColor = red.withAlphaComponent(0.85); beam.strokeColor = red; beam.alpha = 1 },
+                .wait(forDuration: onTime),
+                .run { beam.userData?["live"] = false; beam.alpha = 0.06 },
+                .wait(forDuration: offTime - warn),
+                .run { beam.fillColor = amber.withAlphaComponent(0.6); beam.strokeColor = amber },
+                .repeat(.sequence([.fadeAlpha(to: 0.5, duration: 0.05), .wait(forDuration: 0.05),
+                                   .fadeAlpha(to: 0.15, duration: 0.05), .wait(forDuration: 0.05)]), count: 2)
+            ])))
             worldNode.addChild(beam); lasers.append(beam)
             // Cannon-bots bookend the beam — solid (not children of the blinking beam).
             for ex in [-110.0, 110.0] {
@@ -590,6 +606,7 @@ final class GameScene: SKScene {
     private func blip(_ pos: CGPoint, _ text: String, _ color: SKColor) {
         let s = RichLabel(text: text); s.fontSize = 26; s.fontColor = color
         s.position = pos; s.zPosition = ZLayer.fx; worldNode.addChild(s)
+        Effects.burst(at: pos, color: color, count: 10, in: worldNode)
         s.run(.sequence([.group([.moveBy(x: 0, y: 42, duration: 0.5), .fadeOut(withDuration: 0.5)]), .removeFromParent()]))
     }
 
@@ -626,7 +643,7 @@ final class GameScene: SKScene {
         }
         for pad in speedPads where pad.position.distance(to: pp) < 40 { speedTimer = 1.3 }
         if starTimer <= 0 && !player.isShielded && !grappling {
-            for beam in lasers where beam.alpha > 0.5
+            for beam in lasers where (beam.userData?["live"] as? Bool) == true
                 && abs(beam.position.x - pp.x) < 110 && abs(beam.position.y - pp.y) < 16 {
                 handleCaught(.laser); break
             }
@@ -728,7 +745,9 @@ final class GameScene: SKScene {
     private func addCover(at p: CGPoint) {
         let (node, rect) = CharacterFactory.makeCover(shape: biome.coverShape, fill: biome.coverFill, detail: biome.coverDetail)
         node.position = p
-        node.zPosition = ZLayer.coverTops
+        // Bushes are canopies you hide inside (always on top); crates/pillars y-sort by their front edge.
+        node.zPosition = biome.coverShape == .bush ? ZLayer.coverTops
+            : ZLayer.depth(p.y + rect.minY, worldHeight: worldSize.height)
         worldNode.addChild(node)
         coverRects.append(CGRect(x: p.x + rect.minX, y: p.y + rect.minY, width: rect.width, height: rect.height))
     }
@@ -797,6 +816,7 @@ final class GameScene: SKScene {
         ambientOverlay?.removeFromParent(); vignetteNode?.removeFromParent(); ambientEmitter?.removeFromParent()
         ambientOverlay = nil; vignetteNode = nil; ambientEmitter = nil
 
+        Minion.conesAboveNight = biome.ambientAlpha >= 0.2
         if biome.ambientAlpha > 0 {
             let o = Effects.ambientOverlay(color: biome.ambientColor, alpha: biome.ambientAlpha)
             cam.addChild(o); ambientOverlay = o
@@ -981,7 +1001,7 @@ final class GameScene: SKScene {
 
         // Same-direction traffic to overtake (spawns ahead, moves up slower).
         trafficTimer += dt
-        if trafficTimer > (level.isBoat ? 0.62 : 0.8) { trafficTimer = 0; spawnTraffic() }
+        if trafficTimer > (level.isBoat ? 0.80 : 0.95) { trafficTimer = 0; spawnTraffic() }
         for car in trafficCars {
             car.position.y += 150 * dtf
             car.position.x = roadCenterX(car.position.y) + (car.userData?["lane"] as? CGFloat ?? 0)
@@ -1424,31 +1444,45 @@ final class GameScene: SKScene {
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55), size: CGSize(width: 4000, height: 4000))
         overlay.addChild(dim)
 
-        let card = roundedRect(size: CGSize(width: min(size.width - 36, 520), height: 260), corner: 22, color: Palette.hudPanel)
+        let card = roundedRect(size: CGSize(width: min(size.width - 36, 520), height: 300), corner: 22, color: Palette.hudPanel)
         card.strokeColor = biome.accent; card.lineWidth = 2.5
         overlay.addChild(card)
 
         let eyebrow = RichLabel(text: "LEVEL \(level.index)")
         eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 16; eyebrow.fontColor = biome.accent
-        eyebrow.position = CGPoint(x: 0, y: 86); card.addChild(eyebrow)
+        eyebrow.position = CGPoint(x: 0, y: 110); card.addChild(eyebrow)
         let name = RichLabel(text: level.name)
         name.fontName = "AvenirNext-Heavy"; name.fontSize = 34; name.fontColor = .white
-        name.position = CGPoint(x: 0, y: 46); card.addChild(name)
+        name.position = CGPoint(x: 0, y: 70); card.addChild(name)
         let nameMaxW = min(size.width - 36, 520) - 40
         if name.frame.width > nameMaxW { name.setScale(nameMaxW / name.frame.width) }
         let sub = RichLabel(text: level.subtitle)
         sub.fontName = "AvenirNext-Medium"; sub.fontSize = 15; sub.fontColor = SKColor(white: 0.85, alpha: 1)
         sub.numberOfLines = 2; sub.preferredMaxLayoutWidth = min(size.width - 90, 460)
         sub.verticalAlignmentMode = .center
-        sub.position = CGPoint(x: 0, y: 6); card.addChild(sub)
+        sub.position = CGPoint(x: 0, y: 28); card.addChild(sub)
         let obj = RichLabel(text: "🎯  " + level.objective)
         obj.fontName = "AvenirNext-Medium"; obj.fontSize = 14; obj.fontColor = biome.accent
         obj.numberOfLines = 2; obj.preferredMaxLayoutWidth = min(size.width - 90, 460)
         obj.verticalAlignmentMode = .center
-        obj.position = CGPoint(x: 0, y: -46); card.addChild(obj)
+        obj.position = CGPoint(x: 0, y: -22); card.addChild(obj)
+        // Star goals up front, so players know what "perfect" means before they start.
+        let best = GameScene.bestStars(level)
+        let goals = [level.isDriving ? "No crashes" : "Never spotted", starGoalThird]
+        let starsLine = RichLabel(text: "★ Finish   ★ \(goals[0])   ★ \(goals[1])")
+        starsLine.fontName = "AvenirNext-DemiBold"; starsLine.fontSize = 12
+        starsLine.fontColor = Palette.energy
+        starsLine.position = CGPoint(x: 0, y: -64); card.addChild(starsLine)
+        let lineMaxW = min(size.width - 36, 520) - 30
+        if starsLine.frame.width > lineMaxW { starsLine.setScale(lineMaxW / starsLine.frame.width) }
+        if best > 0 {
+            let bestL = RichLabel(text: "Best: " + String(repeating: "★", count: best) + String(repeating: "☆", count: 3 - best))
+            bestL.fontName = "AvenirNext-Bold"; bestL.fontSize = 12; bestL.fontColor = SKColor(white: 0.75, alpha: 1)
+            bestL.position = CGPoint(x: 0, y: -86); card.addChild(bestL)
+        }
         let go = RichLabel(text: "tap to begin ▸")
         go.fontName = "AvenirNext-Bold"; go.fontSize = 14; go.fontColor = .white
-        go.position = CGPoint(x: 0, y: -98); card.addChild(go)
+        go.position = CGPoint(x: 0, y: -122); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
 
         dramatize(card, in: overlay, accent: biome.accent)
@@ -1558,6 +1592,7 @@ final class GameScene: SKScene {
         let result = starResult()
         let earned = result.earned.filter { $0 }.count
         recordStars(earned)
+        if earned == 3 { askForReviewLater() }
         let card = roundedRect(size: CGSize(width: min(size.width - 36, 460), height: 320), corner: 22, color: Palette.hudPanel)
         card.strokeColor = Palette.energy; card.lineWidth = 3
         overlay.addChild(card)
@@ -1600,6 +1635,7 @@ final class GameScene: SKScene {
 
     private func showWinScreen() {
         state = .won
+        askForReviewLater()
         setControlsHidden(true)
         SoundFX.shared.stopMusic()
         SoundFX.shared.play("win")
@@ -2143,6 +2179,7 @@ final class GameScene: SKScene {
         let dt = min(currentTime - lastUpdate, 1.0/30.0)
         lastUpdate = currentTime
         if demoMode { runDemo(dt: dt) }
+        applyDepthSort()
 
         if state == .minigame { updateMinigame(dt: dt); return }
 
@@ -2166,10 +2203,11 @@ final class GameScene: SKScene {
         }
 
         if state == .playing { movePlayer(dt: dt) }
-        player.update(dt: dt)
+        let frozen = state == .intro || state == .dialogue
+        if !frozen { player.update(dt: dt) }
         cam.position = cameraWithShake(clampedCamera(player.position), dt: dt)
 
-        for m in minions { m.update(dt: dt) }
+        if !frozen { for m in minions { m.update(dt: dt) } }
         if state == .playing {
             levelTime += dt
             updateStealth(dt: dt)
@@ -2213,7 +2251,13 @@ final class GameScene: SKScene {
         if grappling { return }   // the zip animates the player
         var v = joystick.vector
         if v.dx == 0 && v.dy == 0 { v = keyboardVector() }
+        if player.isDashing {
+            // Dash always goes full speed: normalise the stick, or keep the last heading if released.
+            let l = hypot(v.dx, v.dy)
+            v = l > 0.01 ? CGVector(dx: v.dx / l, dy: v.dy / l) : lastMoveDir
+        }
         if v.dx == 0 && v.dy == 0 { player.stopWalk(); return }
+        let vl = hypot(v.dx, v.dy); if vl > 0.01 { lastMoveDir = CGVector(dx: v.dx / vl, dy: v.dy / vl) }
         var spd = player.currentSpeed()
         if speedTimer > 0 { spd *= 1.7 }       // speed pad boost
         if playerInWater { spd *= 0.5 }        // water slows you down
@@ -2285,7 +2329,7 @@ final class GameScene: SKScene {
     private func grapple() {
         guard !grappling, let target = grappleTarget else { return }
         grappling = true
-        joystick.end()
+        // Keep the joystick touch alive: movement pauses while zipping (movePlayer returns) and resumes after.
         grappleBtn.isHidden = true
         let dest = target.position
         let dist = dest.distance(to: player.position)
@@ -2312,7 +2356,7 @@ final class GameScene: SKScene {
         var caught = false
         for m in minions {
             let sees = exposed && m.canSee(point: player.position)
-            m.setSeeing(sees, dt: dt)
+            if m.setSeeing(sees, target: player.position, dt: dt) { SoundFX.shared.play("suspect", volume: 0.8); Haptics.tap() }
             if sees && m.alertLevel >= 1 { caught = true }
         }
         player.visual.alpha = playerHidden ? 0.55 : (player.inCostume ? 1.0 : 0.92)
@@ -2459,9 +2503,27 @@ final class GameScene: SKScene {
         return StarResult(earned: [true, clean, third],
                           labels: ["Mission complete", level.isDriving ? "No crashes" : "Never spotted", thirdLabel])
     }
+    private var starGoalThird: String {
+        if level.isDriving { return "Under \(level.isBoat ? 45 : 40)s" }
+        return level.coinSpots.isEmpty ? "No damage" : "All \(level.coinSpots.count) coins"
+    }
     static func bestStars(_ lvl: LevelData) -> Int { UserDefaults.standard.integer(forKey: "kaiditya.stars.\(lvl.name)") }
     /// Saves the best star count and pays 2 coins per newly earned star (first clear = 1 star included).
     @discardableResult
+    /// Ask for an App Store rating only at a high point (3★ clear or the boss win), once per app version,
+    /// a few seconds after the celebration so it never interrupts play.
+    private func askForReviewLater() {
+        guard !demoMode else { return }
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let key = "kaiditya.reviewAsked"
+        guard UserDefaults.standard.string(forKey: key) != ver else { return }
+        UserDefaults.standard.set(ver, forKey: key)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let scene = self?.view?.window?.windowScene else { return }
+            AppStore.requestReview(in: scene)
+        }
+    }
+
     private func recordStars(_ n: Int) -> Int {
         let key = "kaiditya.stars.\(level.name)"
         let best = UserDefaults.standard.integer(forKey: key)
@@ -2494,6 +2556,7 @@ final class GameScene: SKScene {
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
         SoundFX.shared.play("caught"); shake(9, 0.25); Haptics.hit()
+        player.hitFlash(); hitStop(0.06)
         timesHit += 1
         lives = max(0, lives - 1)
         hud.setLives(lives, max: maxLives)
@@ -2553,6 +2616,7 @@ final class GameScene: SKScene {
         setCheckpoint(c.position); Haptics.tap()
         player.addEnergy(18)
         SoundFX.shared.play("collect")
+        Effects.burst(at: c.position, color: Palette.crystal, count: 22, speed: 190, in: worldNode)
         hud.updateCrystals(crystals)
         hud.showToast("Energy Crystal! ✦  (\(crystals)/\(level.crystalsRequired))", color: Palette.crystal)
         let spark = RichLabel(text: "✦"); spark.fontSize = 28; spark.fontColor = Palette.crystal
@@ -3011,7 +3075,7 @@ final class GameScene: SKScene {
         bossFightActive = true
         hud.showBossBar(name: "LORD CHOW-CHOW", total: 3 * level.bossPhases)
         SoundFX.shared.playMusic("boss", volume: 0.55)
-        v.run(.repeatForever(.sequence([.moveBy(x: 130, y: 0, duration: 0.95), .moveBy(x: -130, y: 0, duration: 0.95)])), withKey: "dodge")
+        v.run(bossDodge(), withKey: "dodge")
         // Attack scheduler: patterns escalate with the phase.
         run(.repeatForever(.sequence([.wait(forDuration: 2.4), .run { [weak self] in self?.bossAttack() }])), withKey: "bossAttacks")
     }
@@ -3038,6 +3102,14 @@ final class GameScene: SKScene {
         spark.zPosition = ZLayer.fx; worldNode.addChild(spark)
         spark.run(.sequence([.group([.scale(to: 1.6, duration: 0.2), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
         landBossHit(v)
+    }
+
+    /// Side-to-side sway, always slower than the hero's walk (90 pts over 0.8/0.7/0.6 s by phase).
+    private func bossDodge() -> SKAction {
+        let d = [0.8, 0.7, 0.6][min(max(bossPhase, 1), 3) - 1]
+        let a = SKAction.moveBy(x: 90, y: 0, duration: d), b = SKAction.moveBy(x: -90, y: 0, duration: d)
+        a.timingMode = .easeInEaseOut; b.timingMode = .easeInEaseOut
+        return .repeatForever(.sequence([a, b, b, a]))
     }
 
     /// Boss attack patterns — more variety as phases rise.
@@ -3203,8 +3275,7 @@ final class GameScene: SKScene {
                          .move(to: home, duration: 0.6),
                          .run { [weak self] in
                              self?.bossCharging = false
-                             let d = max(0.4, 0.85 - CGFloat(self?.bossPhase ?? 1) * 0.15)
-                             v.run(.repeatForever(.sequence([.moveBy(x: 170, y: 0, duration: d), .moveBy(x: -170, y: 0, duration: d)])), withKey: "dodge")
+                             if let a = self?.bossDodge() { v.run(a, withKey: "dodge") }
                          }]))
     }
 
@@ -3256,8 +3327,7 @@ final class GameScene: SKScene {
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
         // faster dodging
         v.removeAction(forKey: "dodge")
-        let d = max(0.4, 0.85 - CGFloat(bossPhase) * 0.15)
-        v.run(.repeatForever(.sequence([.moveBy(x: 170, y: 0, duration: d), .moveBy(x: -170, y: 0, duration: d)])), withKey: "dodge")
+        v.run(bossDodge(), withKey: "dodge")
         // spawn two guard minions
         for sx in [-160.0, 160.0] {
             let m = Minion(waypoints: [CGPoint(x: v.position.x + sx, y: v.position.y - 120),
@@ -3302,6 +3372,22 @@ final class GameScene: SKScene {
 
     // MARK: - Autopilot (reactive)
 
+    /// Freeze the world for a few frames on impact (HUD/joystick live on the camera and keep running).
+    private func hitStop(_ t: TimeInterval) {
+        worldNode.isPaused = true
+        run(.sequence([.wait(forDuration: t), .run { [weak self] in self?.worldNode.isPaused = false }]))
+    }
+
+    /// Y-sort moving characters each frame (static props are sorted once when placed).
+    private func applyDepthSort() {
+        let h = worldSize.height
+        player.zPosition = ZLayer.depth(player.position.y - 16, worldHeight: h)
+        for m in minions { m.applyDepth(worldHeight: h) }
+        for n in npcs { n.zPosition = ZLayer.depth(n.position.y - 16, worldHeight: h) }
+        if let v = villain { v.zPosition = ZLayer.depth(v.position.y - 20, worldHeight: h) }
+        if let d = petNode { d.zPosition = ZLayer.depth(d.position.y, worldHeight: h) }
+    }
+
     private func runDemo(dt: TimeInterval) {
         demoActionTimer += dt
         func tap(_ minGap: TimeInterval = 0.8) -> Bool {
@@ -3339,7 +3425,8 @@ final class GameScene: SKScene {
 
         // Keep shield up to traverse safely — except during the boss, where
         // energy must be saved for dashing.
-        if objective != .boss, !player.isShielded, player.energy >= 40 { player.tryShield() }
+        if objective != .boss, ProcessInfo.processInfo.environment["KAIDITYA_NOSHIELD"] == nil,
+           !player.isShielded, player.energy >= 40 { player.tryShield() }
 
         switch objective {
         case .collect:
