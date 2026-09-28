@@ -190,7 +190,7 @@ final class HUD: SKNode {
         bossName.text = "⚡ \(name) ⚡"
         bossName.position = CGPoint(x: centerX, y: top - 8)
         bossHint.removeFromParent(); bossBar.addChild(bossHint)
-        bossHint.text = "Chase him & tap HIT!  ·  SHIELD blocks his zaps"
+        bossHint.text = "Get close as HERO & tap HIT!  ·  SHIELD blocks zaps"
         bossHint.position = CGPoint(x: centerX, y: top - 48)
         bossHint.run(.repeatForever(.sequence([.fadeAlpha(to: 0.55, duration: 0.8), .fadeAlpha(to: 1, duration: 0.8)])))
         bossBar.isHidden = false

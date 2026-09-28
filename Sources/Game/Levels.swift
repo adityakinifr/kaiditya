@@ -282,9 +282,9 @@ enum Levels {
         biome: Biomes.park,
         worldSize: CGSize(width: 2600, height: 1800),
         heroSpawn: CGPoint(x: 460, y: 900),
-        corePos: CGPoint(x: 470, y: 980),
+        corePos: CGPoint(x: 2300, y: 520),     // near the exit: no cross-map backtrack
         exitPos: CGPoint(x: 2420, y: 900),
-        crystalsRequired: 5,
+        crystalsRequired: 4,
         crystalSpots: [
             CGPoint(x: 1650, y: 1050), CGPoint(x: 1950, y: 1320),
             CGPoint(x: 2250, y: 1000), CGPoint(x: 2080, y: 680),
@@ -295,7 +295,7 @@ enum Levels {
             [CGPoint(x: 1950, y: 1150), CGPoint(x: 2300, y: 1150)],
             [CGPoint(x: 2200, y: 760), CGPoint(x: 2200, y: 1250)]
         ],
-        minionSpeed: 70, minionRange: 150,
+        minionSpeed: 65, minionRange: 145,
         coverSpots: [
             CGPoint(x: 1750, y: 1150), CGPoint(x: 2020, y: 1220), CGPoint(x: 2180, y: 920),
             CGPoint(x: 1900, y: 760), CGPoint(x: 2300, y: 1320), CGPoint(x: 1680, y: 1350)
@@ -321,8 +321,9 @@ enum Levels {
                     tint: SKColor(red: 0.8, green: 0.6, blue: 0.85, alpha: 1))
         ],
         hasBoss: false,
-        objective: "Recover 5 Crystals, then charge the Core",
-        exitLabel: "EXIT")
+        objective: "Recover 4 Crystals, then charge the Core",
+        exitLabel: "EXIT",
+        coinSpots: [CGPoint(x: 800, y: 900), CGPoint(x: 1100, y: 980), CGPoint(x: 1380, y: 880)])
 
     static let chase = LevelData(
         index: 2,
@@ -362,10 +363,9 @@ enum Levels {
             [CGPoint(x: 1100, y: 600), CGPoint(x: 1100, y: 1300)],
             [CGPoint(x: 1450, y: 900), CGPoint(x: 1900, y: 900)],
             [CGPoint(x: 2000, y: 1200), CGPoint(x: 2000, y: 1600)],
-            [CGPoint(x: 2300, y: 800), CGPoint(x: 2600, y: 800), CGPoint(x: 2600, y: 1300)],
-            [CGPoint(x: 1700, y: 1400), CGPoint(x: 2200, y: 1400)]
+            [CGPoint(x: 2300, y: 800), CGPoint(x: 2600, y: 800), CGPoint(x: 2600, y: 1300)]
         ],
-        minionSpeed: 85, minionRange: 160,
+        minionSpeed: 80, minionRange: 155,
         coverSpots: [
             CGPoint(x: 1150, y: 850), CGPoint(x: 1400, y: 1150), CGPoint(x: 1700, y: 700),
             CGPoint(x: 1950, y: 1000), CGPoint(x: 2150, y: 1300), CGPoint(x: 2400, y: 850),
@@ -385,6 +385,7 @@ enum Levels {
         hasBoss: false,
         objective: "Free 4 dock workers from the cages",
         exitLabel: "FERRY",
+        coinSpots: [CGPoint(x: 700, y: 1250), CGPoint(x: 1350, y: 1550), CGPoint(x: 2350, y: 1100)],
         mission: .rescue,
         siteSpots: [CGPoint(x: 1200, y: 700), CGPoint(x: 1850, y: 800), CGPoint(x: 2050, y: 1450), CGPoint(x: 2500, y: 700)])
 
@@ -405,7 +406,7 @@ enum Levels {
             [CGPoint(x: 900, y: 1050), CGPoint(x: 1600, y: 1050)],
             [CGPoint(x: 1250, y: 600), CGPoint(x: 1250, y: 1300)]
         ],
-        minionSpeed: 105, minionRange: 170,
+        minionSpeed: 100, minionRange: 180,
         coverSpots: [
             CGPoint(x: 750, y: 950), CGPoint(x: 1750, y: 950), CGPoint(x: 750, y: 1200),
             CGPoint(x: 1750, y: 1200), CGPoint(x: 1050, y: 800), CGPoint(x: 1450, y: 800),
@@ -445,7 +446,7 @@ enum Levels {
         minionPatrols: [[CGPoint(x: 1200, y: 600), CGPoint(x: 1200, y: 1350)],
                         [CGPoint(x: 1700, y: 700), CGPoint(x: 2100, y: 700)],
                         [CGPoint(x: 1900, y: 1300), CGPoint(x: 2300, y: 1300)]],
-        minionSpeed: 100, minionRange: 165,
+        minionSpeed: 95, minionRange: 175,
         coverSpots: [CGPoint(x: 1150, y: 900), CGPoint(x: 1450, y: 1050), CGPoint(x: 1750, y: 900),
                      CGPoint(x: 2000, y: 1100), CGPoint(x: 1300, y: 700), CGPoint(x: 2200, y: 1000)],
         treeSpots: [],
@@ -477,7 +478,7 @@ enum Levels {
                        CGPoint(x: 2050, y: 1200), CGPoint(x: 1500, y: 900), CGPoint(x: 2200, y: 750)],
         minionPatrols: [[CGPoint(x: 1100, y: 600), CGPoint(x: 1100, y: 1250)],
                         [CGPoint(x: 1900, y: 700), CGPoint(x: 1900, y: 1250)]],
-        minionSpeed: 90, minionRange: 160,
+        minionSpeed: 85, minionRange: 160,
         coverSpots: [CGPoint(x: 1000, y: 900), CGPoint(x: 1400, y: 750), CGPoint(x: 1750, y: 1050),
                      CGPoint(x: 2100, y: 950), CGPoint(x: 1300, y: 1300)],
         treeSpots: [],
@@ -488,6 +489,7 @@ enum Levels {
         hasBoss: false,
         objective: "Get 5 Crystals past the lasers",
         exitLabel: "VAULT",
+        coinSpots: [CGPoint(x: 650, y: 1250), CGPoint(x: 1250, y: 450), CGPoint(x: 2300, y: 1400)],
         laserGates: [CGPoint(x: 1200, y: 1000), CGPoint(x: 1600, y: 1300), CGPoint(x: 1900, y: 700),
                      CGPoint(x: 2200, y: 1100)],
         // Introduces lasers (+ a magnet helper). Water, grapple and traps come later.
@@ -508,7 +510,7 @@ enum Levels {
         minionPatrols: [[CGPoint(x: 1100, y: 650), CGPoint(x: 1100, y: 1300)],
                         [CGPoint(x: 1550, y: 800), CGPoint(x: 2000, y: 800)],
                         [CGPoint(x: 1900, y: 1300), CGPoint(x: 2300, y: 1300)]],
-        minionSpeed: 95, minionRange: 165,
+        minionSpeed: 90, minionRange: 165,
         coverSpots: [CGPoint(x: 1050, y: 950), CGPoint(x: 1450, y: 1050), CGPoint(x: 1800, y: 1050),
                      CGPoint(x: 2150, y: 1000), CGPoint(x: 1300, y: 750)],
         treeSpots: [],
@@ -569,7 +571,7 @@ enum Levels {
                         [CGPoint(x: 1850, y: 700), CGPoint(x: 1850, y: 1450)],
                         [CGPoint(x: 950, y: 1050), CGPoint(x: 1650, y: 1050)],
                         [CGPoint(x: 1300, y: 600), CGPoint(x: 1300, y: 1350)]],
-        minionSpeed: 120, minionRange: 185,
+        minionSpeed: 120, minionRange: 195,
         coverSpots: [CGPoint(x: 800, y: 950), CGPoint(x: 1800, y: 950), CGPoint(x: 800, y: 1250),
                      CGPoint(x: 1800, y: 1250), CGPoint(x: 1100, y: 800), CGPoint(x: 1500, y: 800)],
         treeSpots: [],
@@ -606,7 +608,7 @@ enum Levels {
                         [CGPoint(x: 2200, y: 600), CGPoint(x: 2800, y: 600)],
                         [CGPoint(x: 2500, y: 1300), CGPoint(x: 2500, y: 1900)],
                         [CGPoint(x: 2900, y: 900), CGPoint(x: 2900, y: 1700)]],
-        minionSpeed: 110, minionRange: 175,
+        minionSpeed: 110, minionRange: 185,
         coverSpots: [CGPoint(x: 950, y: 950), CGPoint(x: 1350, y: 1300), CGPoint(x: 1700, y: 900),
                      CGPoint(x: 2050, y: 1500), CGPoint(x: 2350, y: 1150), CGPoint(x: 2650, y: 1400),
                      CGPoint(x: 1550, y: 1850), CGPoint(x: 2850, y: 1000), CGPoint(x: 1200, y: 600)],
@@ -649,7 +651,7 @@ enum Levels {
                         [CGPoint(x: 2100, y: 600), CGPoint(x: 2100, y: 1500)],
                         [CGPoint(x: 2500, y: 900), CGPoint(x: 2900, y: 900)],
                         [CGPoint(x: 2600, y: 1500), CGPoint(x: 2600, y: 2000)]],
-        minionSpeed: 115, minionRange: 180,
+        minionSpeed: 115, minionRange: 190,
         coverSpots: [CGPoint(x: 900, y: 950), CGPoint(x: 1300, y: 1300), CGPoint(x: 1650, y: 1000),
                      CGPoint(x: 2000, y: 1450), CGPoint(x: 2350, y: 1100), CGPoint(x: 2650, y: 1450),
                      CGPoint(x: 1500, y: 1850), CGPoint(x: 2800, y: 950), CGPoint(x: 1150, y: 650)],

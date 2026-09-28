@@ -92,8 +92,9 @@ enum Economy {
     static var costumesOwned: Int { Costume.allCases.filter { ownedCostume($0) }.count }
 
     static func addCoins(_ n: Int) {
+        let earned = coinsEarned   // read before the balance changes (getter floors at balance)
         UserDefaults.standard.set(coins + n, forKey: coinKey)
-        UserDefaults.standard.set(coinsEarned + n, forKey: "kaiditya.earned")
+        UserDefaults.standard.set(earned + n, forKey: "kaiditya.earned")
     }
 
     static func owned(_ u: Upgrade) -> Bool { UserDefaults.standard.bool(forKey: upKey(u)) }
@@ -130,22 +131,21 @@ enum Economy {
 
     // MARK: Daily bonus
 
-    private static var today: Int { Int(Date().timeIntervalSince1970 / 86400) }
+    /// Local calendar day number, so the daily gift resets at the child's midnight, not UTC.
+    private static var today: Int {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
+    }
     static var canClaimDaily: Bool { UserDefaults.standard.integer(forKey: "kaiditya.daily") != today }
-    static var dailyStreak: Int { UserDefaults.standard.integer(forKey: "kaiditya.streak") }
 
-    /// Claim the once-per-day chest. Reward grows with the consecutive-day streak.
-    /// Returns the reward and the new streak (reward 0 if already claimed today).
+    /// Claim the once-per-day chest: a small flat gift. No streaks, nothing lost by skipping days.
     @discardableResult
     static func claimDaily() -> (reward: Int, streak: Int) {
-        guard canClaimDaily else { return (0, dailyStreak) }
-        let last = UserDefaults.standard.integer(forKey: "kaiditya.daily")  // 0 if never claimed
-        let streak = (last == today - 1) ? dailyStreak + 1 : 1
+        guard canClaimDaily else { return (0, 0) }
         UserDefaults.standard.set(today, forKey: "kaiditya.daily")
-        UserDefaults.standard.set(streak, forKey: "kaiditya.streak")
-        let reward = min(10 + streak * 5, 50)
+        let reward = 10
         addCoins(reward)
-        return (reward, streak)
+        return (reward, 0)
     }
 
     // MARK: Wishing fountain (once-per-day fortune)

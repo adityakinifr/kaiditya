@@ -17,12 +17,16 @@ final class Player: SKNode {
     var energy: CGFloat = 100
     var walkSpeed: CGFloat = 200
     var dashSpeed: CGFloat = 560
-    var shieldDuration: TimeInterval = 4.0
+    var shieldDuration: TimeInterval = 3.0
 
     private(set) var isShielded = false
     private(set) var isDashing = false
     private var dashTimer: TimeInterval = 0
     private var shieldTimer: TimeInterval = 0
+    /// Recharge time after a shield ends, so it can't be chained indefinitely.
+    private(set) var shieldCooldown: TimeInterval = 0
+    static let shieldCooldownTime: TimeInterval = 4.0
+    var canShield: Bool { energy >= 35 && !isShielded && shieldCooldown <= 0 }
 
     /// In costume the minions can recognize you; "secret identity" lets you blend in.
     private(set) var inCostume = true
@@ -109,7 +113,7 @@ final class Player: SKNode {
 
     @discardableResult
     func tryShield() -> Bool {
-        guard energy >= 35, !isShielded else { return false }
+        guard canShield else { return false }
         energy -= 35
         isShielded = true
         shieldTimer = shieldDuration
@@ -149,19 +153,23 @@ final class Player: SKNode {
             dashTimer -= dt
             if dashTimer <= 0 { isDashing = false }
         }
+        if shieldCooldown > 0 { shieldCooldown -= dt }
         if isShielded {
             shieldTimer -= dt
             shieldBubble.zRotation += CGFloat(dt) * 2
+            // Blink during the last second so the expiry is readable.
+            shieldBubble.alpha = shieldTimer < 1.0 ? (Int(shieldTimer * 10) % 2 == 0 ? 0.35 : 1) : 1
             if shieldTimer <= 0 {
                 isShielded = false
+                shieldCooldown = Self.shieldCooldownTime
                 shieldBubble.run(.sequence([.fadeOut(withDuration: 0.2), .run { [weak self] in
                     self?.shieldBubble.isHidden = true
                     self?.shieldBubble.alpha = 1
                 }]))
             }
         }
-        // Regenerate energy over time.
-        if energy < maxEnergy {
+        // Regenerate energy over time (paused while the shield is up).
+        if energy < maxEnergy && !isShielded {
             energy = min(maxEnergy, energy + CGFloat(dt) * 12)
         }
     }
@@ -213,7 +221,7 @@ final class Player: SKNode {
         walkSpeed = Economy.owned(.boots) ? 250 : 200
         dashSpeed = Economy.owned(.dash) ? 700 : 560
         maxEnergy = Economy.owned(.energy) ? 135 : 100
-        shieldDuration = Economy.owned(.shield) ? 6.5 : 4.0
+        shieldDuration = Economy.owned(.shield) ? 4.5 : 3.0
     }
 
     /// Reset hero state at the start of a level.
@@ -221,6 +229,7 @@ final class Player: SKNode {
         applyUpgrades()
         energy = maxEnergy
         isShielded = false
+        shieldCooldown = 0
         isDashing = false
         shieldBubble.isHidden = true
         shieldBubble.alpha = 1
