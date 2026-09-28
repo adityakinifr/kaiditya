@@ -1,12 +1,13 @@
 #!/bin/bash
-# Build, install, launch Kaiditya in the iPhone 16 simulator, then screenshot.
+# Build, install, launch Kaiditya in the booted simulator, then screenshot.
 set -e
-DEV=3424D3FB-19AD-4338-B88F-2E901268C3F4
+DEV=${KAIDITYA_SIM:-$(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" | head -1)}
+[ -z "$DEV" ] && { echo "Boot a simulator first (or set KAIDITYA_SIM)"; exit 1; }
 SHOT=${1:-/tmp/kaiditya_run.png}
 
 echo "▸ Building..."
 xcodebuild -project Kaiditya.xcodeproj -scheme Kaiditya -sdk iphonesimulator \
-  -configuration Debug -destination "id=$DEV" -derivedDataPath build build \
+  -configuration Debug -destination "id=$DEV" -derivedDataPath build CODE_SIGNING_ALLOWED=NO build \
   2>&1 | grep -E "error:|BUILD SUCCEEDED|BUILD FAILED" | head -40
 
 APP=$(find build/Build/Products -name "Kaiditya.app" -type d | head -1)

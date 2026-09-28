@@ -145,8 +145,18 @@ final class GameScene: SKScene {
     private var dialogueCloseCallbacks: [() -> Void] = []
 
     // Autopilot (KAIDITYA_DEMO=1)
-    private let demoMode = ProcessInfo.processInfo.environment["KAIDITYA_DEMO"] == "1"
+    private let demoMode = GameScene.debugEnv("KAIDITYA_DEMO") == "1"
     private var demoActionTimer: TimeInterval = 0
+
+    /// Launch-environment debug hooks (KAIDITYA_*) for screenshots/autopilot.
+    /// Compiled out of Release builds so shipped apps have no hidden modes.
+    private static func debugEnv(_ key: String) -> String? {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment[key]
+        #else
+        return nil
+        #endif
+    }
 
     // MARK: - Lifecycle
 
@@ -162,22 +172,22 @@ final class GameScene: SKScene {
         layoutHUD()
         showTitle()
 
-        if ProcessInfo.processInfo.environment["KAIDITYA_SHOP"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_SHOP") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.showShop() }
         }
-        if ProcessInfo.processInfo.environment["KAIDITYA_HUB"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_HUB") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
             }
         }
-        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_PLAYLEVEL"], let idx = Int(lv) {
+        if let lv = GameScene.debugEnv("KAIDITYA_PLAYLEVEL"), let idx = Int(lv) {
             // Jump straight into a level for real play (normal flow: intro → controls).
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent()
                 self?.loadLevel(idx)
             }
         }
-        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_VIEWLEVEL"], let idx = Int(lv) {
+        if let lv = GameScene.debugEnv("KAIDITYA_VIEWLEVEL"), let idx = Int(lv) {
             // Static level view for art validation: load the level, dismiss the
             // intro, but DO NOT autopilot — the player never moves, so nothing is
             // collected or persisted (keeps the save untouched).
@@ -213,19 +223,19 @@ final class GameScene: SKScene {
                 }
             }
         }
-        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_COMPLETE"], let idx = Int(lv) {
+        if let lv = GameScene.debugEnv("KAIDITYA_COMPLETE"), let idx = Int(lv) {
             // Screenshot hook: jump straight to a level's clear card (1 coin, clean run).
             loadLevel(idx); cam.childNode(withName: "introOverlay")?.removeFromParent()
             levelCoins = 1; levelTime = 30
             run(.sequence([.wait(forDuration: 0.5), .run { [weak self] in self?.showLevelComplete() }]))
             return
         }
-        if ProcessInfo.processInfo.environment["KAIDITYA_ARCADE"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_ARCADE") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.startMinigame()
             }
         }
-        if ProcessInfo.processInfo.environment["KAIDITYA_WISH"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_WISH") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 guard let self else { return }
                 self.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self.enterHub()
@@ -237,7 +247,7 @@ final class GameScene: SKScene {
                 }
             }
         }
-        if ProcessInfo.processInfo.environment["KAIDITYA_PET"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_PET") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 guard let self else { return }
                 self.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self.enterHub()
@@ -250,7 +260,7 @@ final class GameScene: SKScene {
                 }
             }
         }
-        if ProcessInfo.processInfo.environment["KAIDITYA_MAP"] == "1" {
+        if GameScene.debugEnv("KAIDITYA_MAP") == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.showMap()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showStats() }
@@ -1821,7 +1831,7 @@ final class GameScene: SKScene {
     private func startGame() {
         cam.childNode(withName: "titleOverlay")?.removeFromParent()
         if demoMode {
-            let start = Int(ProcessInfo.processInfo.environment["KAIDITYA_START_LEVEL"] ?? "") ?? 0
+            let start = Int(GameScene.debugEnv("KAIDITYA_START_LEVEL") ?? "") ?? 0
             loadLevel(min(max(start, 0), Levels.all.count - 1))
         } else {
             enterHub()
