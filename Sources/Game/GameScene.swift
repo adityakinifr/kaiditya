@@ -1141,8 +1141,8 @@ final class GameScene: SKScene {
         sub.fontName = "AvenirNext-Medium"; sub.fontSize = 17; sub.fontColor = .white
         sub.position = CGPoint(x: 0, y: 90); card.addChild(sub)
 
-        let hero = CharacterFactory.makeHero()
-        hero.setScale(1.2); hero.position = CGPoint(x: 0, y: -20)
+        let hero = CharacterSprite(.hero, facing: .s, scale: 0.55)
+        hero.position = CGPoint(x: 0, y: -75)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:9,duration:0.5), .moveBy(x:0,y:-9,duration:0.5)])))
         card.addChild(hero)
 
@@ -1618,7 +1618,7 @@ final class GameScene: SKScene {
         s.position = CGPoint(x: 0, y: 18); card.addChild(s)
         let s2 = RichLabel(text: "Kaiditya is the city's greatest hero!"); s2.fontName = "AvenirNext-Medium"; s2.fontSize = 15; s2.fontColor = .white
         s2.position = CGPoint(x: 0, y: -6); card.addChild(s2)
-        let hero = CharacterFactory.makeHero(); hero.setScale(1.8); hero.position = CGPoint(x: 0, y: -92)
+        let hero = CharacterSprite(.hero, facing: .s, scale: 0.6); hero.position = CGPoint(x: 0, y: -150)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:10,duration:0.5), .moveBy(x:0,y:-10,duration:0.5)])))
         card.addChild(hero)
         dramatize(card, in: overlay, accent: Palette.energy)
