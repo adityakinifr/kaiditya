@@ -3,27 +3,25 @@ import SpriteKit
 /// Floating virtual joystick. Appears under the player's thumb on the left side,
 /// reports a normalized direction vector each frame.
 final class Joystick: SKNode {
-    private let base: SKShapeNode
-    private let knob: SKShapeNode
+    private let base: SKSpriteNode
+    private let knob: SKSpriteNode
     private let radius: CGFloat = 60
+
+    static let knobColor = SKColor(red: 0.88, green: 0.90, blue: 0.97, alpha: 1)
 
     private(set) var vector: CGVector = .zero
     private(set) var isActive = false
     private var trackingTouch: UITouch?
 
     override init() {
-        base = SKShapeNode(circleOfRadius: 60)
-        knob = SKShapeNode(circleOfRadius: 28)
+        // Toon skin: translucent ring with ink outline + a bevelled "toy" knob.
+        base = SKSpriteNode(texture: ToonArt.ring(radius: 60))
+        knob = SKSpriteNode(texture: ToonArt.disc(color: Joystick.knobColor, radius: 28, depth: 4))
+        knob.anchorPoint = CGPoint(x: 0.5, y: 0.5 + ToonArt.discFaceOffset(depth: 4) / knob.size.height)
         super.init()
 
-        base.fillColor = SKColor(white: 1, alpha: 0.12)
-        base.strokeColor = SKColor(white: 1, alpha: 0.35)
-        base.lineWidth = 3
         base.zPosition = ZLayer.hud
-
-        knob.fillColor = SKColor(white: 1, alpha: 0.45)
-        knob.strokeColor = SKColor(white: 1, alpha: 0.7)
-        knob.lineWidth = 2
+        knob.alpha = 0.92
         knob.zPosition = ZLayer.hud + 1
 
         addChild(base)

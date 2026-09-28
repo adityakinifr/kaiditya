@@ -223,6 +223,7 @@ final class GameScene: SKScene {
         }
         if let lv = ProcessInfo.processInfo.environment["KAIDITYA_COMPLETE"], let idx = Int(lv) {
             // Screenshot hook: jump straight to a level's clear card (1 coin, clean run).
+            cam.childNode(withName: "titleOverlay")?.removeFromParent()
             loadLevel(idx); cam.childNode(withName: "introOverlay")?.removeFromParent()
             levelCoins = 1; levelTime = 30
             run(.sequence([.wait(forDuration: 0.5), .run { [weak self] in self?.showLevelComplete() }]))
@@ -242,6 +243,16 @@ final class GameScene: SKScene {
                     self.player.position = CGPoint(x: self.fountainPos.x, y: self.fountainPos.y - 70)
                     self.updateHubInteract()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.makeWish() }
+                }
+            }
+        }
+        if ProcessInfo.processInfo.environment["KAIDITYA_DIALOGUE"] == "1" {
+            // Screenshot hook: hub + a sample NPC dialogue box.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self else { return }
+                self.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self.enterHub()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                    self?.showDialogue(speaker: "Tommy", lines: ["Kaiditya! Lord Chow-Chow's minions took all my coins. Can you help me find them around town? ★"])
                 }
             }
         }
@@ -323,14 +334,15 @@ final class GameScene: SKScene {
 
         // Left-side "move" hint (a dashed ring), hidden after first use.
         let hint = SKNode()
-        let ring = SKShapeNode(circleOfRadius: 52)
-        ring.strokeColor = SKColor(white: 1, alpha: 0.3); ring.lineWidth = 3; ring.fillColor = SKColor(white: 1, alpha: 0.05)
+        let ring = SKSpriteNode(texture: ToonArt.ring(radius: 52))
+        ring.alpha = 0.8
         hint.addChild(ring)
-        let dot = SKShapeNode(circleOfRadius: 22)
-        dot.fillColor = SKColor(white: 1, alpha: 0.18); dot.strokeColor = .clear
+        let dot = SKSpriteNode(texture: ToonArt.disc(color: Joystick.knobColor, radius: 22))
+        dot.position.y = -ToonArt.discFaceOffset(); dot.alpha = 0.55
         hint.addChild(dot)
-        let lbl = RichLabel(text: "MOVE"); lbl.fontName = "AvenirNext-Bold"; lbl.fontSize = 11
-        lbl.fontColor = SKColor(white: 1, alpha: 0.5); lbl.position = CGPoint(x: 0, y: -70)
+        let lbl = RichLabel(text: "MOVE"); lbl.fontName = Theme.display; lbl.fontSize = 13
+        lbl.fontColor = SKColor(white: 1, alpha: 0.85); lbl.position = CGPoint(x: 0, y: -72)
+        lbl.shadowColor = Palette.ink.withAlphaComponent(0.7); lbl.shadowOffset = CGVector(dx: 0, dy: -1.5)
         hint.addChild(lbl)
         hint.zPosition = ZLayer.hud
         hint.run(.repeatForever(.sequence([.fadeAlpha(to: 0.5, duration: 0.8), .fadeAlpha(to: 1, duration: 0.8)])))
@@ -341,13 +353,15 @@ final class GameScene: SKScene {
             let p = CGMutablePath(); p.move(to: CGPoint(x: 16, y: 0))
             p.addLine(to: CGPoint(x: -10, y: -11)); p.addLine(to: CGPoint(x: -10, y: 11)); p.closeSubpath(); return p
         }())
-        tri.name = "tri"; tri.fillColor = Palette.energy; tri.strokeColor = .white; tri.lineWidth = 1.5; tri.glowWidth = 2
+        tri.name = "tri"; tri.fillColor = Palette.energy; tri.strokeColor = Palette.ink; tri.lineWidth = 3; tri.lineJoin = .round
         objectiveArrow.addChild(tri)
         let arrowLbl = RichLabel(text: ""); arrowLbl.name = "lbl"
-        arrowLbl.fontName = "AvenirNext-Heavy"; arrowLbl.fontSize = 11; arrowLbl.fontColor = .white
+        arrowLbl.fontName = Theme.display; arrowLbl.fontSize = 12; arrowLbl.fontColor = .white
         arrowLbl.verticalAlignmentMode = .center; arrowLbl.horizontalAlignmentMode = .center
-        let arrowPlate = roundedRect(size: CGSize(width: 72, height: 18), corner: 9, color: SKColor(white: 0, alpha: 0.6))
-        arrowPlate.name = "plate"; arrowPlate.position = CGPoint(x: 0, y: -24); arrowPlate.addChild(arrowLbl)
+        arrowLbl.position.y = 1; arrowLbl.zPosition = 1
+        let arrowPlate = ToonArt.rect(size: CGSize(width: 84, height: 24),
+                                      style: ToonArt.RectStyle(corner: 10, fill: Theme.panelFill, outline: 2.5, shadow: 2))
+        arrowPlate.name = "plate"; arrowPlate.position = CGPoint(x: 0, y: -27); arrowPlate.addChild(arrowLbl)
         objectiveArrow.addChild(arrowPlate)
         objectiveArrow.zPosition = ZLayer.hud + 2
         objectiveArrow.isHidden = true
@@ -1159,13 +1173,33 @@ final class GameScene: SKScene {
 
     private func positionOverlay(_ node: SKNode) { node.position = .zero }
 
+    /// Small round toon button (mute / stats / quit): bevelled disc + a glyph on its face.
+    private func toonDiscButton(name: String, glyph: String, color: SKColor, radius: CGFloat = 22, glyphSize: CGFloat = 22) -> SKNode {
+        let b = SKNode(); b.name = name
+        let disc = SKSpriteNode(texture: ToonArt.disc(color: color, radius: radius))
+        disc.position.y = -ToonArt.discFaceOffset()
+        b.addChild(disc)
+        let icon = RichLabel(text: glyph)
+        icon.name = name + "Icon"; icon.fontName = Theme.display; icon.fontSize = glyphSize
+        icon.fontColor = .white; icon.verticalAlignmentMode = .center; icon.zPosition = 1
+        icon.shadowColor = Palette.ink.withAlphaComponent(0.4); icon.shadowOffset = CGVector(dx: 0, dy: -1.5)
+        b.addChild(icon)
+        return b
+    }
+
+    /// Big display-font heading with a chunky ink drop shadow.
+    private func toonTitle(_ text: String, size fs: CGFloat, color: SKColor = Palette.energy) -> RichLabel {
+        let l = RichLabel(text: text)
+        l.fontName = Theme.display; l.fontSize = fs; l.fontColor = color
+        l.shadowColor = Palette.ink; l.shadowOffset = CGVector(dx: 0, dy: -max(2, fs * 0.07))
+        return l
+    }
+
     private func addMuteButton(to overlay: SKNode) {
-        let b = SKNode(); b.name = "muteButton"; b.zPosition = 50
+        let b = toonDiscButton(name: "muteButton", glyph: SoundFX.shared.muted ? "🔇" : "🔊", color: Palette.heroBlue)
+        b.zPosition = 50
         b.position = CGPoint(x: size.width/2 - 40, y: size.height/2 - safeTop - 30)
-        let circ = SKShapeNode(circleOfRadius: 22)
-        circ.fillColor = Palette.hudPanel; circ.strokeColor = Palette.hudAccent; circ.lineWidth = 1.5; b.addChild(circ)
-        let icon = RichLabel(text: SoundFX.shared.muted ? "🔇" : "🔊")
-        icon.name = "muteIcon"; icon.fontSize = 22; icon.verticalAlignmentMode = .center; b.addChild(icon)
+        b.childNode(withName: "muteButtonIcon")?.name = "muteIcon"
         overlay.addChild(b)
     }
 
@@ -1192,7 +1226,7 @@ final class GameScene: SKScene {
             ray.zRotation = CGFloat(i) / CGFloat(count) * .pi * 2
             node.addChild(ray)
         }
-        node.zPosition = -1
+        node.zPosition = -2
         node.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: 40)))
         return node
     }
@@ -1225,36 +1259,31 @@ final class GameScene: SKScene {
         overlay.name = "titleOverlay"; overlay.zPosition = ZLayer.overlay
 
         let bg = SKSpriteNode(color: SKColor(red: 0.10, green: 0.13, blue: 0.22, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        bg.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(bg)
         // soft sky particles
         if let stars = Effects.ambient(.sparks, screen: size) {
             stars.particleColor = SKColor(red: 0.5, green: 0.8, blue: 1, alpha: 1)
-            stars.particleBirthRate = 6; overlay.addChild(stars)
+            stars.particleBirthRate = 6; stars.zPosition = -4; overlay.addChild(stars)
         }
 
-        let card = roundedRect(size: CGSize(width: min(size.width - 40, 460), height: 400), corner: 24, color: Palette.hudPanel)
-        card.strokeColor = Palette.hudAccent; card.lineWidth = 2
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 40, 460), height: 404), corner: 28, trim: Palette.hudAccent.withAlphaComponent(0.5))
         card.position = CGPoint(x: 0, y: 10); overlay.addChild(card)
 
-        let title = RichLabel(text: "KAIDITYA")
-        title.fontName = "AvenirNext-Heavy"; title.fontSize = 56; title.fontColor = Palette.energy
-        title.position = CGPoint(x: 0, y: 130); card.addChild(title)
+        let title = toonTitle("KAIDITYA", size: 64)
+        title.position = CGPoint(x: 0, y: 124); card.addChild(title)
         let sub = RichLabel(text: "Pint-Sized Hero, Big-Time Save")
-        sub.fontName = "AvenirNext-Medium"; sub.fontSize = 17; sub.fontColor = .white
-        sub.position = CGPoint(x: 0, y: 90); card.addChild(sub)
+        sub.fontName = Theme.body; sub.fontSize = 16; sub.fontColor = Theme.textDim
+        sub.position = CGPoint(x: 0, y: 92); card.addChild(sub)
 
         let hero = CharacterSprite(.hero, facing: .s, scale: 0.55)
         hero.position = CGPoint(x: 0, y: -75)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:9,duration:0.5), .moveBy(x:0,y:-9,duration:0.5)])))
         card.addChild(hero)
 
-        let play = roundedRect(size: CGSize(width: 220, height: 56), corner: 14, color: Palette.heroBlue)
-        play.strokeColor = .white; play.lineWidth = 2
-        play.position = CGPoint(x: 0, y: -150); play.name = "playButton"
+        let play = ToonArt.button(size: CGSize(width: 220, height: 62), color: Palette.heroBlue, text: "▶  PLAY", fontSize: 28)
+        play.position = CGPoint(x: 0, y: -148); play.name = "playButton"
         play.run(.repeatForever(.sequence([.scale(to: 1.04, duration: 0.7), .scale(to: 1.0, duration: 0.7)])))
-        let playLabel = RichLabel(text: "▶  PLAY")
-        playLabel.fontName = "AvenirNext-Heavy"; playLabel.fontSize = 23; playLabel.fontColor = .white
-        playLabel.verticalAlignmentMode = .center; play.addChild(playLabel)
         card.addChild(play)
 
         dramatize(card, in: overlay, accent: Palette.energy)
@@ -1270,21 +1299,19 @@ final class GameScene: SKScene {
         cam.childNode(withName: "mapOverlay")?.removeFromParent()
         let overlay = SKNode(); overlay.name = "mapOverlay"; overlay.zPosition = ZLayer.overlay
         let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        bg.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(bg)
         if let stars = Effects.ambient(.sparks, screen: size) {
             stars.particleColor = SKColor(red: 0.5, green: 0.8, blue: 1, alpha: 1); stars.particleBirthRate = 5
-            overlay.addChild(stars)
+            stars.zPosition = -4; overlay.addChild(stars)
         }
-        let title = RichLabel(text: "SELECT A ZONE")
-        title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
-        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
+        let title = toonTitle("SELECT A ZONE", size: 34)
+        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 62); overlay.addChild(title)
 
         // Stats button (top-left, mirrors the mute button).
-        let stats = SKNode(); stats.name = "statsButton"; stats.zPosition = 50
+        let stats = toonDiscButton(name: "statsButton", glyph: "📊", color: Palette.heroBlue, glyphSize: 20)
+        stats.zPosition = 50
         stats.position = CGPoint(x: -size.width/2 + 40, y: size.height/2 - safeTop - 30)
-        let sc = SKShapeNode(circleOfRadius: 22); sc.fillColor = Palette.hudPanel; sc.strokeColor = Palette.hudAccent; sc.lineWidth = 1.5
-        stats.addChild(sc)
-        let si = RichLabel(text: "📊"); si.fontSize = 20; si.verticalAlignmentMode = .center; stats.addChild(si)
         overlay.addChild(stats)
 
         // Serpentine layout of the 9 zones.
@@ -1303,30 +1330,36 @@ final class GameScene: SKScene {
         let path = CGMutablePath()
         path.move(to: positions[0])
         for p in positions.dropFirst() { path.addLine(to: p) }
-        let line = SKShapeNode(path: path)
-        line.strokeColor = SKColor(white: 1, alpha: 0.18); line.lineWidth = 5; line.lineCap = .round
-        line.zPosition = 0; overlay.addChild(line)
+        let lineInk = SKShapeNode(path: path)
+        lineInk.strokeColor = Palette.ink.withAlphaComponent(0.8); lineInk.lineWidth = 11; lineInk.lineCap = .round; lineInk.lineJoin = .round
+        lineInk.zPosition = 0; overlay.addChild(lineInk)
+        let line = SKShapeNode(path: path.copy(dashingWithPhase: 0, lengths: [10, 9]))
+        line.strokeColor = SKColor(white: 1, alpha: 0.35); line.lineWidth = 4; line.lineCap = .round
+        line.zPosition = 0.1; overlay.addChild(line)
 
         for (i, lvl) in Levels.all.enumerated() {
             let unlocked = i <= maxUnlocked
             let node = SKNode(); node.position = positions[i]; node.name = "mapnode_\(i)"; node.zPosition = 1
-            let circle = SKShapeNode(circleOfRadius: 30)
-            circle.fillColor = unlocked ? lvl.biome.accent.withAlphaComponent(0.92) : SKColor(white: 0.25, alpha: 0.9)
-            circle.strokeColor = unlocked ? .white : SKColor(white: 0.45, alpha: 1); circle.lineWidth = 3
-            if unlocked { circle.glowWidth = 3 }
+            let circle = SKNode()
+            let disc = SKSpriteNode(texture: ToonArt.disc(color: unlocked ? lvl.biome.accent : SKColor(white: 0.42, alpha: 1),
+                                                          radius: 30, state: unlocked ? .up : .off))
+            disc.position.y = -ToonArt.discFaceOffset()
+            circle.addChild(disc)
             node.addChild(circle)
             let num = RichLabel(text: unlocked ? "\(lvl.index)" : "🔒")
-            num.fontName = "AvenirNext-Heavy"; num.fontSize = unlocked ? 22 : 18
-            num.fontColor = unlocked ? .white : SKColor(white: 0.6, alpha: 1)
-            num.verticalAlignmentMode = .center; node.addChild(num)
+            num.fontName = Theme.display; num.fontSize = unlocked ? 28 : 20
+            num.fontColor = unlocked ? .white : SKColor(white: 0.72, alpha: 1)
+            num.shadowColor = Palette.ink.withAlphaComponent(0.6); num.shadowOffset = CGVector(dx: 0, dy: -2)
+            num.verticalAlignmentMode = .center; num.zPosition = 1; circle.addChild(num)
             let name = RichLabel(text: lvl.name)
-            name.fontName = "AvenirNext-Bold"; name.fontSize = 10
-            name.fontColor = unlocked ? .white : SKColor(white: 0.5, alpha: 1)
-            name.verticalAlignmentMode = .center; name.position = CGPoint(x: 0, y: -44)
+            name.fontName = Theme.bodyBold; name.fontSize = 10.5
+            name.fontColor = unlocked ? .white : SKColor(white: 0.55, alpha: 1)
+            name.shadowColor = Palette.ink; name.shadowOffset = CGVector(dx: 0, dy: -1.2)
+            name.verticalAlignmentMode = .center; name.position = CGPoint(x: 0, y: -48)
             name.numberOfLines = 2; name.preferredMaxLayoutWidth = 100; node.addChild(name)
             let best = GameScene.bestStars(lvl)
             if unlocked && best > 0 {
-                let row = GameScene.starRow(best, size: 12); row.position = CGPoint(x: 0, y: 40); node.addChild(row)
+                let row = GameScene.starRow(best, size: 15); row.position = CGPoint(x: 0, y: 40); row.zPosition = 2; node.addChild(row)
             }
             if i == maxUnlocked && maxUnlocked < Levels.all.count {
                 circle.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.5), .scale(to: 1.0, duration: 0.5)])))
@@ -1334,25 +1367,20 @@ final class GameScene: SKScene {
             overlay.addChild(node)
         }
         let hint = RichLabel(text: "tap a zone to play")
-        hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
+        hint.fontName = Theme.body; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
         hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 70); overlay.addChild(hint)
         addMuteButton(to: overlay)
 
         // SHOP button
-        let shop = roundedRect(size: CGSize(width: 180, height: 44), corner: 14, color: Palette.energy.darker)
-        shop.strokeColor = .white; shop.lineWidth = 2; shop.name = "shopButton"
-        shop.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 30)
-        let shopLbl = RichLabel(text: "🛒  SHOP  ·  \(Economy.coins)★")
-        shopLbl.fontName = "AvenirNext-Heavy"; shopLbl.fontSize = 16; shopLbl.fontColor = .white
-        shopLbl.verticalAlignmentMode = .center; shop.addChild(shopLbl)
+        let shop = ToonArt.button(size: CGSize(width: 180, height: 48), color: Palette.energy.darker,
+                                  text: "🛒 SHOP · \(Economy.coins)★", fontSize: 18, corner: 16)
+        shop.name = "shopButton"
         shop.position = CGPoint(x: -98, y: -size.height/2 + safeBottom + 30)
         overlay.addChild(shop)
 
-        let home = roundedRect(size: CGSize(width: 150, height: 44), corner: 14, color: Palette.heroBlue)
-        home.strokeColor = .white; home.lineWidth = 2; home.name = "homeButton"
+        let home = ToonArt.button(size: CGSize(width: 150, height: 48), color: Palette.heroBlue, text: "🏠 CITY", fontSize: 18, corner: 16)
+        home.name = "homeButton"
         home.position = CGPoint(x: 96, y: -size.height/2 + safeBottom + 30)
-        let homeLbl = RichLabel(text: "🏠  CITY"); homeLbl.fontName = "AvenirNext-Heavy"; homeLbl.fontSize = 16
-        homeLbl.fontColor = .white; homeLbl.verticalAlignmentMode = .center; home.addChild(homeLbl)
         overlay.addChild(home)
 
         cam.addChild(overlay)
@@ -1364,12 +1392,12 @@ final class GameScene: SKScene {
         ["shopOverlay", "titleOverlay", "mapOverlay"].forEach { cam.childNode(withName: $0)?.removeFromParent() }
         let overlay = SKNode(); overlay.name = "shopOverlay"; overlay.zPosition = ZLayer.overlay
         let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        bg.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(bg)
-        let title = RichLabel(text: "GADGET SHOP")
-        title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
-        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
+        let title = toonTitle("GADGET SHOP", size: 34)
+        title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 62); overlay.addChild(title)
         let purse = RichLabel(text: "Coins: \(Economy.coins) ★")
-        purse.fontName = "AvenirNext-Bold"; purse.fontSize = 17; purse.fontColor = .white
+        purse.fontName = Theme.display; purse.fontSize = 20; purse.fontColor = .white
         purse.position = CGPoint(x: 0, y: size.height/2 - safeTop - 96); overlay.addChild(purse)
 
         let rowW = min(size.width - 40, 460), rowH: CGFloat = 78
@@ -1377,25 +1405,26 @@ final class GameScene: SKScene {
         for u in Upgrade.allCases {
             let owned = Economy.owned(u)
             let afford = Economy.coins >= u.price
-            let row = roundedRect(size: CGSize(width: rowW, height: rowH), corner: 14, color: Palette.hudPanel)
-            row.strokeColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.4, alpha: 1))
-            row.lineWidth = 2; row.position = CGPoint(x: 0, y: y); row.name = "shoprow_\(u.rawValue)"
+            let row = ToonArt.panel(size: CGSize(width: rowW, height: rowH), corner: 16,
+                                    trim: owned ? Palette.crystal : (afford ? Palette.energy : nil))
+            row.position = CGPoint(x: 0, y: y); row.name = "shoprow_\(u.rawValue)"
             let g = RichLabel(text: u.glyph); g.fontSize = 30; g.verticalAlignmentMode = .center
-            g.position = CGPoint(x: -rowW/2 + 34, y: 0); row.addChild(g)
-            let t = RichLabel(text: u.title); t.fontName = "AvenirNext-Heavy"; t.fontSize = 17; t.fontColor = .white
-            t.horizontalAlignmentMode = .left; t.position = CGPoint(x: -rowW/2 + 62, y: 12); row.addChild(t)
-            let d = RichLabel(text: u.desc); d.fontName = "AvenirNext-Regular"; d.fontSize = 12; d.fontColor = SKColor(white: 0.8, alpha: 1)
-            d.horizontalAlignmentMode = .left; d.position = CGPoint(x: -rowW/2 + 62, y: -12); row.addChild(d)
+            g.position = CGPoint(x: -rowW/2 + 36, y: 2); row.addChild(g)
+            let t = RichLabel(text: u.title); t.fontName = Theme.display; t.fontSize = 19; t.fontColor = .white
+            t.horizontalAlignmentMode = .left; t.position = CGPoint(x: -rowW/2 + 64, y: 12); row.addChild(t)
+            let d = RichLabel(text: u.desc); d.fontName = Theme.bodyMedium; d.fontSize = 12; d.fontColor = Theme.textDim
+            d.horizontalAlignmentMode = .left; d.position = CGPoint(x: -rowW/2 + 64, y: -11); row.addChild(d)
             let price = RichLabel(text: owned ? "OWNED ✓" : "\(u.price) ★")
-            price.fontName = "AvenirNext-Heavy"; price.fontSize = 16
+            price.fontName = Theme.display; price.fontSize = 18
             price.fontColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.55, alpha: 1))
-            price.horizontalAlignmentMode = .right; price.position = CGPoint(x: rowW/2 - 20, y: 0); row.addChild(price)
+            price.horizontalAlignmentMode = .right; price.verticalAlignmentMode = .center
+            price.position = CGPoint(x: rowW/2 - 20, y: 2); row.addChild(price)
             overlay.addChild(row)
             y -= rowH + 12
         }
 
         // Costume picker.
-        let costLbl = RichLabel(text: "COSTUMES"); costLbl.fontName = "AvenirNext-Heavy"; costLbl.fontSize = 14
+        let costLbl = RichLabel(text: "COSTUMES"); costLbl.fontName = Theme.display; costLbl.fontSize = 17
         costLbl.fontColor = Palette.hudAccent; costLbl.position = CGPoint(x: 0, y: y - 6); overlay.addChild(costLbl)
         let all = Costume.allCases
         let sw: CGFloat = 50, gap: CGFloat = 12
@@ -1403,27 +1432,30 @@ final class GameScene: SKScene {
         var cx = -totalW/2 + sw/2
         for c in all {
             let node = SKNode(); node.position = CGPoint(x: cx, y: y - 56); node.name = "cosrow_\(c.rawValue)"
-            let body = roundedRect(size: CGSize(width: sw, height: sw), corner: 10, color: c.suit)
             let equipped = Economy.equippedCostume == c
             let owned = Economy.ownedCostume(c)
-            body.strokeColor = equipped ? Palette.energy : (owned ? .white : SKColor(white: 0.45, alpha: 1))
-            body.lineWidth = equipped ? 3.5 : 2
+            if equipped {
+                let halo = ToonArt.rect(size: CGSize(width: sw + 10, height: sw + 10),
+                                        style: ToonArt.RectStyle(corner: 14, fill: Palette.energy, outline: 2.5, shadow: 0))
+                halo.position.y = 1.5; halo.zPosition = -2; node.addChild(halo)
+            }
+            let body = ToonArt.rect(size: CGSize(width: sw, height: sw), style: ToonArt.RectStyle(corner: 11, fill: c.suit, shadow: 3))
+            body.alpha = owned ? 1 : 0.6; body.zPosition = -1
             node.addChild(body)
-            let capeChip = roundedRect(size: CGSize(width: 14, height: 22), corner: 3, color: c.cape)
-            capeChip.position = CGPoint(x: 14, y: -4); node.addChild(capeChip)
+            let capeChip = roundedRect(size: CGSize(width: 14, height: 22), corner: 3, color: c.cape, stroke: Palette.ink, lineWidth: 2)
+            capeChip.position = CGPoint(x: 13, y: -2); capeChip.zPosition = 0.5; node.addChild(capeChip)
             let tag = RichLabel(text: equipped ? "✓" : (owned ? c.name : "\(c.price)★"))
-            tag.fontName = "AvenirNext-Bold"; tag.fontSize = equipped ? 16 : 9
+            tag.fontName = Theme.display; tag.fontSize = equipped ? 17 : 11
             tag.fontColor = equipped ? Palette.energy : .white; tag.verticalAlignmentMode = .center
-            tag.position = CGPoint(x: 0, y: -sw/2 - 9); node.addChild(tag)
+            tag.position = CGPoint(x: 0, y: -sw/2 - 12); node.addChild(tag)
             overlay.addChild(node)
             cx += sw + gap
         }
 
-        let back = roundedRect(size: CGSize(width: 160, height: 44), corner: 14, color: Palette.heroBlue)
-        back.strokeColor = .white; back.lineWidth = 2; back.name = "shopBack"
+        let back = ToonArt.button(size: CGSize(width: 160, height: 48), color: Palette.heroBlue, text: "◂ BACK", fontSize: 19, corner: 16)
+        back.name = "shopBack"
         back.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 34)
-        let bl = RichLabel(text: "◂ BACK"); bl.fontName = "AvenirNext-Heavy"; bl.fontSize = 16; bl.fontColor = .white
-        bl.verticalAlignmentMode = .center; back.addChild(bl); overlay.addChild(back)
+        overlay.addChild(back)
         cam.addChild(overlay); positionOverlay(overlay)
     }
 
@@ -1459,11 +1491,11 @@ final class GameScene: SKScene {
         mapOverlay.childNode(withName: "statsCard")?.removeFromParent()
         let panel = SKNode(); panel.name = "statsCard"; panel.zPosition = 60
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.78), size: CGSize(width: 4000, height: 4000))
+        dim.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         panel.addChild(dim)
-        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 320), corner: 20, color: Palette.hudPanel)
-        card.strokeColor = Palette.hudAccent; card.lineWidth = 2.5; panel.addChild(card)
-        let title = RichLabel(text: "HERO STATS"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 26
-        title.fontColor = Palette.energy; title.position = CGPoint(x: 0, y: 122); card.addChild(title)
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 60, 380), height: 324), corner: 24, trim: Palette.hudAccent.withAlphaComponent(0.6))
+        panel.addChild(card)
+        let title = toonTitle("HERO STATS", size: 30); title.position = CGPoint(x: 0, y: 118); card.addChild(title)
         let zonesReached = min(UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked") + 1, Levels.all.count)
         let rows: [(String, String)] = [
             ("🪙  Coins earned", "\(Economy.coinsEarned)"),
@@ -1475,14 +1507,14 @@ final class GameScene: SKScene {
         ]
         var y: CGFloat = 78
         for (label, value) in rows {
-            let l = RichLabel(text: label); l.fontName = "AvenirNext-Medium"; l.fontSize = 16; l.fontColor = .white
+            let l = RichLabel(text: label); l.fontName = Theme.body; l.fontSize = 16; l.fontColor = .white
             l.horizontalAlignmentMode = .left; l.position = CGPoint(x: -150, y: y); card.addChild(l)
-            let v = RichLabel(text: value); v.fontName = "AvenirNext-Heavy"; v.fontSize = 16; v.fontColor = Palette.crystal
+            let v = RichLabel(text: value); v.fontName = Theme.display; v.fontSize = 19; v.fontColor = Palette.crystal
             v.horizontalAlignmentMode = .right; v.position = CGPoint(x: 150, y: y); card.addChild(v)
             y -= 34
         }
-        let go = RichLabel(text: "tap to close ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
-        go.position = CGPoint(x: 0, y: -132); card.addChild(go)
+        let go = RichLabel(text: "tap to close ▸"); go.fontName = Theme.bodyBold; go.fontSize = 13; go.fontColor = Palette.hudAccent
+        go.position = CGPoint(x: 0, y: -130); card.addChild(go)
         dramatize(card, in: panel, accent: Palette.hudAccent, rays: false)
         mapOverlay.addChild(panel)
         SoundFX.shared.play("tap")
@@ -1522,27 +1554,26 @@ final class GameScene: SKScene {
         let overlay = SKNode()
         overlay.name = "introOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55), size: CGSize(width: 4000, height: 4000))
+        dim.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(dim)
 
-        let card = roundedRect(size: CGSize(width: min(size.width - 36, 520), height: 300), corner: 22, color: Palette.hudPanel)
-        card.strokeColor = biome.accent; card.lineWidth = 2.5
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 36, 520), height: 304), corner: 26, trim: biome.accent.withAlphaComponent(0.7))
         overlay.addChild(card)
 
         let eyebrow = RichLabel(text: "LEVEL \(level.index)")
-        eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 16; eyebrow.fontColor = biome.accent
+        eyebrow.fontName = Theme.display; eyebrow.fontSize = 19; eyebrow.fontColor = biome.accent
         eyebrow.position = CGPoint(x: 0, y: 110); card.addChild(eyebrow)
-        let name = RichLabel(text: level.name)
-        name.fontName = "AvenirNext-Heavy"; name.fontSize = 34; name.fontColor = .white
-        name.position = CGPoint(x: 0, y: 70); card.addChild(name)
+        let name = toonTitle(level.name, size: 40, color: .white)
+        name.position = CGPoint(x: 0, y: 68); card.addChild(name)
         let nameMaxW = min(size.width - 36, 520) - 40
         if name.frame.width > nameMaxW { name.setScale(nameMaxW / name.frame.width) }
         let sub = RichLabel(text: level.subtitle)
-        sub.fontName = "AvenirNext-Medium"; sub.fontSize = 15; sub.fontColor = SKColor(white: 0.85, alpha: 1)
+        sub.fontName = Theme.bodyMedium; sub.fontSize = 15; sub.fontColor = Theme.textDim
         sub.numberOfLines = 2; sub.preferredMaxLayoutWidth = min(size.width - 90, 460)
         sub.verticalAlignmentMode = .center
         sub.position = CGPoint(x: 0, y: 28); card.addChild(sub)
         let obj = RichLabel(text: "🎯  " + level.objective)
-        obj.fontName = "AvenirNext-Medium"; obj.fontSize = 14; obj.fontColor = biome.accent
+        obj.fontName = Theme.body; obj.fontSize = 14; obj.fontColor = biome.accent
         obj.numberOfLines = 2; obj.preferredMaxLayoutWidth = min(size.width - 90, 460)
         obj.verticalAlignmentMode = .center
         obj.position = CGPoint(x: 0, y: -22); card.addChild(obj)
@@ -1550,18 +1581,18 @@ final class GameScene: SKScene {
         let best = GameScene.bestStars(level)
         let goals = [level.isDriving ? "No crashes" : "Never spotted", starGoalThird]
         let starsLine = RichLabel(text: "★ Finish   ★ \(goals[0])   ★ \(goals[1])")
-        starsLine.fontName = "AvenirNext-DemiBold"; starsLine.fontSize = 12
+        starsLine.fontName = Theme.bodyBold; starsLine.fontSize = 12.5
         starsLine.fontColor = Palette.energy
         starsLine.position = CGPoint(x: 0, y: -64); card.addChild(starsLine)
         let lineMaxW = min(size.width - 36, 520) - 30
         if starsLine.frame.width > lineMaxW { starsLine.setScale(lineMaxW / starsLine.frame.width) }
         if best > 0 {
             let bestL = RichLabel(text: "Best: " + String(repeating: "★", count: best) + String(repeating: "☆", count: 3 - best))
-            bestL.fontName = "AvenirNext-Bold"; bestL.fontSize = 12; bestL.fontColor = SKColor(white: 0.75, alpha: 1)
+            bestL.fontName = Theme.bodyBold; bestL.fontSize = 12; bestL.fontColor = Theme.textDim
             bestL.position = CGPoint(x: 0, y: -86); card.addChild(bestL)
         }
         let go = RichLabel(text: "tap to begin ▸")
-        go.fontName = "AvenirNext-Bold"; go.fontSize = 14; go.fontColor = .white
+        go.fontName = Theme.display; go.fontSize = 17; go.fontColor = .white
         go.position = CGPoint(x: 0, y: -122); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
 
@@ -1614,6 +1645,7 @@ final class GameScene: SKScene {
 
         let overlay = SKNode(); overlay.name = "tourOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.62), size: CGSize(width: 5000, height: 5000))
+        dim.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(dim)
 
         // Highlight ring around the target control.
@@ -1627,20 +1659,19 @@ final class GameScene: SKScene {
 
         // Text card (kept away from bottom controls).
         let cardW = min(size.width - 48, 460)
-        let card = roundedRect(size: CGSize(width: cardW, height: 150), corner: 18, color: Palette.hudPanel)
-        card.strokeColor = Palette.hudAccent; card.lineWidth = 2
+        let card = ToonArt.panel(size: CGSize(width: cardW, height: 154), corner: 22, trim: Palette.hudAccent.withAlphaComponent(0.6))
         card.position = CGPoint(x: 0, y: size.height * 0.16)
         overlay.addChild(card)
         let eyebrow = RichLabel(text: "TIP \(tourStep + 1)/\(steps.count)")
-        eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 12; eyebrow.fontColor = Palette.hudAccent
+        eyebrow.fontName = Theme.display; eyebrow.fontSize = 15; eyebrow.fontColor = Palette.hudAccent
         eyebrow.position = CGPoint(x: 0, y: 50); card.addChild(eyebrow)
         let body = RichLabel(text: step.text)
-        body.fontName = "AvenirNext-Medium"; body.fontSize = 16; body.fontColor = .white
+        body.fontName = Theme.body; body.fontSize = 16; body.fontColor = .white
         body.numberOfLines = 4; body.preferredMaxLayoutWidth = cardW - 40
         body.verticalAlignmentMode = .center; body.horizontalAlignmentMode = .center
         body.position = CGPoint(x: 0, y: 2); card.addChild(body)
         let go = RichLabel(text: tourStep < steps.count - 1 ? "tap to continue ▸" : "tap to play ▸")
-        go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.energy
+        go.fontName = Theme.display; go.fontSize = 15; go.fontColor = Palette.energy
         go.position = CGPoint(x: 0, y: -56); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
 
@@ -1668,35 +1699,34 @@ final class GameScene: SKScene {
         let overlay = SKNode()
         overlay.name = "completeOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55), size: CGSize(width: 4000, height: 4000))
+        dim.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(dim)
         let result = starResult()
         let earned = result.earned.filter { $0 }.count
         recordStars(earned)
         if earned == 3 { askForReviewLater() }
-        let card = roundedRect(size: CGSize(width: min(size.width - 36, 460), height: 320), corner: 22, color: Palette.hudPanel)
-        card.strokeColor = Palette.energy; card.lineWidth = 3
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 36, 460), height: 324), corner: 26, trim: Palette.energy.withAlphaComponent(0.8))
         overlay.addChild(card)
-        let badge = RichLabel(text: "LEVEL \(level.index) CLEAR!")
-        badge.fontName = "AvenirNext-Heavy"; badge.fontSize = 30; badge.fontColor = Palette.energy
-        badge.position = CGPoint(x: 0, y: 112); card.addChild(badge)
-        let star = GameScene.starRow(earned, size: 40)
+        let badge = toonTitle("LEVEL \(level.index) CLEAR!", size: 36)
+        badge.position = CGPoint(x: 0, y: 108); card.addChild(badge)
+        let star = GameScene.starRow(earned, size: 44)
         star.position = CGPoint(x: 0, y: 70); card.addChild(star)
         // Criteria checklist so the player knows exactly how to earn the missing stars.
         for (i, label) in result.labels.enumerated() {
             let ok = result.earned[i]
             let row = RichLabel(text: (ok ? "✓  " : "✕  ") + label)
-            row.fontName = "AvenirNext-DemiBold"; row.fontSize = 15
-            row.fontColor = ok ? Palette.crystal : SKColor(white: 0.6, alpha: 1)
+            row.fontName = Theme.body; row.fontSize = 15
+            row.fontColor = ok ? Palette.crystal : SKColor(white: 0.62, alpha: 1)
             row.horizontalAlignmentMode = .left; row.verticalAlignmentMode = .center
             row.position = CGPoint(x: -110, y: 24 - CGFloat(i) * 26); card.addChild(row)
         }
         let nextName = Levels.all[levelIndex + 1].name
         let nxt = RichLabel(text: "Next: \(nextName)")
-        nxt.fontName = "AvenirNext-Medium"; nxt.fontSize = 16; nxt.fontColor = .white
+        nxt.fontName = Theme.body; nxt.fontSize = 16; nxt.fontColor = .white
         nxt.position = CGPoint(x: 0, y: -80); card.addChild(nxt)
         let go = RichLabel(text: "tap to continue ▸")
-        go.fontName = "AvenirNext-Bold"; go.fontSize = 14; go.fontColor = Palette.hudAccent
-        go.position = CGPoint(x: 0, y: -124); card.addChild(go)
+        go.fontName = Theme.display; go.fontSize = 17; go.fontColor = Palette.hudAccent
+        go.position = CGPoint(x: 0, y: -122); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
         // stars pop in one at a time
         for (i, st) in star.children.enumerated() {
@@ -1721,20 +1751,18 @@ final class GameScene: SKScene {
         SoundFX.shared.play("win")
         let overlay = SKNode(); overlay.name = "winOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.62), size: CGSize(width: 5000, height: 5000))
+        dim.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         overlay.addChild(dim)
         if let conf = Effects.ambient(.sparks, screen: size) {
             conf.particleColor = Palette.energy; conf.particleBirthRate = 30; overlay.addChild(conf)
         }
-        let card = roundedRect(size: CGSize(width: min(size.width - 28, 520), height: 330), corner: 22, color: Palette.hudPanel)
-        card.strokeColor = Palette.energy; card.lineWidth = 3
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 28, 520), height: 334), corner: 26, trim: Palette.energy.withAlphaComponent(0.8))
         overlay.addChild(card)
-        let t1 = RichLabel(text: "YOU SAVED"); t1.fontName = "AvenirNext-Heavy"; t1.fontSize = 40; t1.fontColor = Palette.energy
-        t1.position = CGPoint(x: 0, y: 108); card.addChild(t1)
-        let t2 = RichLabel(text: "THE WORLD!"); t2.fontName = "AvenirNext-Heavy"; t2.fontSize = 40; t2.fontColor = Palette.energy
-        t2.position = CGPoint(x: 0, y: 62); card.addChild(t2)
-        let s = RichLabel(text: "Lord Chow-Chow is defeated across the whole city."); s.fontName = "AvenirNext-Medium"; s.fontSize = 15; s.fontColor = .white
+        let t1 = toonTitle("YOU SAVED", size: 46); t1.position = CGPoint(x: 0, y: 106); card.addChild(t1)
+        let t2 = toonTitle("THE WORLD!", size: 46); t2.position = CGPoint(x: 0, y: 58); card.addChild(t2)
+        let s = RichLabel(text: "Lord Chow-Chow is defeated across the whole city."); s.fontName = Theme.body; s.fontSize = 15; s.fontColor = .white
         s.position = CGPoint(x: 0, y: 18); card.addChild(s)
-        let s2 = RichLabel(text: "Kaiditya is the city's greatest hero!"); s2.fontName = "AvenirNext-Medium"; s2.fontSize = 15; s2.fontColor = .white
+        let s2 = RichLabel(text: "Kaiditya is the city's greatest hero!"); s2.fontName = Theme.body; s2.fontSize = 15; s2.fontColor = .white
         s2.position = CGPoint(x: 0, y: -6); card.addChild(s2)
         let hero = CharacterSprite(.hero, facing: .s, scale: 0.6); hero.position = CGPoint(x: 0, y: -150)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:10,duration:0.5), .moveBy(x:0,y:-10,duration:0.5)])))
@@ -1753,8 +1781,7 @@ final class GameScene: SKScene {
         let overlay = SKNode(); overlay.name = "dialogueOverlay"; overlay.zPosition = ZLayer.overlay
 
         let boxW = min(size.width - 28, 640), inset: CGFloat = 26
-        let box = roundedRect(size: CGSize(width: boxW, height: 180), corner: 16, color: Palette.hudPanel)
-        box.strokeColor = Palette.hudAccent; box.lineWidth = 2
+        let box = ToonArt.panel(size: CGSize(width: boxW, height: 184), corner: 22)
         let finalY = -size.height/2 + safeBottom + 110
         box.position = CGPoint(x: 0, y: finalY)
         overlay.addChild(box)
@@ -1764,21 +1791,25 @@ final class GameScene: SKScene {
         box.run(.group([.fadeIn(withDuration: 0.18), rise]))
 
         // speaker name plate that pops
-        let nameBg = roundedRect(size: CGSize(width: CGFloat(speaker.count) * 12 + 26, height: 30), corner: 10, color: Palette.heroBlue)
-        nameBg.strokeColor = .white; nameBg.lineWidth = 1.5
-        nameBg.position = CGPoint(x: -boxW/2 + inset + (CGFloat(speaker.count) * 12 + 26)/2 - 6, y: 76)
+        let name = RichLabel(text: speaker)
+        name.fontName = Theme.display; name.fontSize = 20; name.fontColor = .white
+        name.shadowColor = Palette.ink.withAlphaComponent(0.5); name.shadowOffset = CGVector(dx: 0, dy: -1.5)
+        name.verticalAlignmentMode = .center; name.position.y = 3; name.zPosition = 1
+        let plateW: CGFloat = max(80, name.frame.width + 34)
+        let nameBg = ToonArt.rect(size: CGSize(width: plateW, height: 38),
+                                  style: ToonArt.RectStyle(corner: 14, fill: Palette.heroBlue, shadow: 3, rim: 3))
+        let plateX: CGFloat = -boxW/2 + inset + plateW/2 - 6
+        nameBg.position = CGPoint(x: plateX, y: 88)
         nameBg.zPosition = 2; box.addChild(nameBg)
         nameBg.setScale(0); nameBg.run(.sequence([.wait(forDuration: 0.12), .scale(to: 1, duration: 0.2)]))
-        let name = RichLabel(text: speaker)
-        name.fontName = "AvenirNext-Heavy"; name.fontSize = 18; name.fontColor = .white
-        name.verticalAlignmentMode = .center; nameBg.addChild(name)
+        nameBg.addChild(name)
         let body = RichLabel(text: lines.first ?? "")
-        body.fontName = "AvenirNext-Medium"; body.fontSize = 17; body.fontColor = .white
+        body.fontName = Theme.body; body.fontSize = 17; body.fontColor = .white
         body.horizontalAlignmentMode = .left; body.verticalAlignmentMode = .top
         body.numberOfLines = 4; body.preferredMaxLayoutWidth = boxW - inset * 2
-        body.position = CGPoint(x: -boxW/2 + inset, y: 30); body.name = "dlgBody"; box.addChild(body)
+        body.position = CGPoint(x: -boxW/2 + inset, y: 52); body.name = "dlgBody"; box.addChild(body)
         let hint = RichLabel(text: "tap to continue ▸")
-        hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
+        hint.fontName = Theme.display; hint.fontSize = 15; hint.fontColor = Palette.hudAccent
         hint.horizontalAlignmentMode = .right; hint.position = CGPoint(x: boxW/2 - inset, y: -70); box.addChild(hint)
 
         overlay.userData = ["lines": lines, "idx": 0]
@@ -2305,6 +2336,11 @@ final class GameScene: SKScene {
         if !demoMode {
             dashBtn.setEnabled(player.energy >= 25)
             shieldBtn.setEnabled(player.canShield)
+            // Radial sweep: how long until the button is ready again.
+            dashBtn.setCooldown(player.energy >= 25 ? 0 : 1 - player.energy / 25)
+            let shieldWait = player.shieldCooldown > 0 ? CGFloat(player.shieldCooldown / Player.shieldCooldownTime)
+                                                       : (player.energy < 35 ? 1 - player.energy / 35 : 0)
+            shieldBtn.setCooldown(player.canShield ? 0 : max(shieldWait, player.isShielded ? 1 : 0))
         }
     }
 
@@ -2653,10 +2689,8 @@ final class GameScene: SKScene {
     static func starRow(_ n: Int, size: CGFloat) -> SKNode {
         let row = SKNode()
         for i in 0..<3 {
-            let st = SKSpriteNode(texture: GlyphIcon.star.texture(size: size * UIScreen.main.scale, color: .white))
-            st.size = CGSize(width: size, height: size)
-            st.position = CGPoint(x: CGFloat(i - 1) * size * 1.05, y: 0)
-            if i >= n { st.color = SKColor(white: 0.35, alpha: 1); st.colorBlendFactor = 1; st.alpha = 0.8 }
+            let st = (i < n ? ToonIcon.star : ToonIcon.starEmpty).sprite(size)
+            st.position = CGPoint(x: CGFloat(i - 1) * size * 1.05, y: i == 1 ? size * 0.12 : 0)
             row.addChild(st)
         }
         return row
@@ -2986,13 +3020,13 @@ final class GameScene: SKScene {
         cam.addChild(mgLayer)
 
         let bg = SKSpriteNode(color: SKColor(red: 0.08, green: 0.12, blue: 0.22, alpha: 1), size: CGSize(width: 4000, height: 4000))
+        bg.zPosition = -5   // backdrop stays behind toon panels (their bg sits at z -1)
         mgLayer.addChild(bg)
-        let title = RichLabel(text: "CRYSTAL CATCH"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 24
-        title.fontColor = Palette.crystal; title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 44); mgLayer.addChild(title)
-        let score = RichLabel(text: "0 ★"); score.name = "mgScore"; score.fontName = "AvenirNext-Heavy"; score.fontSize = 20
+        let title = toonTitle("CRYSTAL CATCH", size: 28, color: Palette.crystal); title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 44); mgLayer.addChild(title)
+        let score = RichLabel(text: "0 ★"); score.name = "mgScore"; score.fontName = Theme.display; score.fontSize = 22
         score.fontColor = Palette.energy; score.horizontalAlignmentMode = .left
         score.position = CGPoint(x: -size.width/2 + 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(score)
-        let timer = RichLabel(text: "30s"); timer.name = "mgTimer"; timer.fontName = "AvenirNext-Heavy"; timer.fontSize = 20
+        let timer = RichLabel(text: "30s"); timer.name = "mgTimer"; timer.fontName = Theme.display; timer.fontSize = 22
         timer.fontColor = .white; timer.horizontalAlignmentMode = .right
         timer.position = CGPoint(x: size.width/2 - 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(timer)
         let best = RichLabel(text: "BEST  \(Economy.bestCatch) ★")
@@ -3012,11 +3046,8 @@ final class GameScene: SKScene {
         catcher.zPosition = 2; mgLayer.addChild(catcher); mgCatcher = catcher
 
         // Early-exit button (bottom-left, clear of the catcher) — quitting banks crystals caught so far.
-        let quit = SKShapeNode(circleOfRadius: 22); quit.name = "mgQuit"
-        quit.fillColor = Palette.hudPanel; quit.strokeColor = Palette.heroRed; quit.lineWidth = 1.5
+        let quit = toonDiscButton(name: "mgQuit", glyph: "✕", color: Palette.heroRed, glyphSize: 20)
         quit.position = CGPoint(x: -size.width/2 + 40, y: -size.height/2 + safeBottom + 40); quit.zPosition = 6
-        let qx = RichLabel(text: "✕"); qx.fontName = "AvenirNext-Heavy"; qx.fontSize = 20
-        qx.fontColor = .white; qx.verticalAlignmentMode = .center; quit.addChild(qx)
         mgLayer.addChild(quit)
     }
 
@@ -3069,16 +3100,15 @@ final class GameScene: SKScene {
         let bonus = newBest ? 5 : 0
         Economy.addCoins(mgScore + bonus)
         SoundFX.shared.play("clear")
-        let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 220), corner: 20, color: Palette.hudPanel)
-        card.strokeColor = Palette.energy; card.lineWidth = 3; card.zPosition = 10; mgLayer.addChild(card)
-        let t = RichLabel(text: newBest ? "NEW BEST! 🎉" : "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"
-        t.fontSize = 26; t.fontColor = Palette.energy; t.position = CGPoint(x: 0, y: 70); card.addChild(t)
+        let card = ToonArt.panel(size: CGSize(width: min(size.width - 60, 380), height: 224), corner: 24, trim: Palette.energy.withAlphaComponent(0.8))
+        card.zPosition = 10; mgLayer.addChild(card)
+        let t = toonTitle(newBest ? "NEW BEST! 🎉" : "TIME'S UP!", size: 30); t.position = CGPoint(x: 0, y: 68); card.addChild(t)
         let r = RichLabel(text: "Caught \(mgScore) crystals"); r.fontName = "AvenirNext-Bold"; r.fontSize = 17; r.fontColor = .white
         r.position = CGPoint(x: 0, y: 30); card.addChild(r)
         let bestL = RichLabel(text: "Best: \(Economy.bestCatch)"); bestL.fontName = "AvenirNext-Medium"; bestL.fontSize = 14
         bestL.fontColor = Palette.crystal; bestL.position = CGPoint(x: 0, y: 4); card.addChild(bestL)
         let c = RichLabel(text: newBest ? "+\(mgScore) ★  +5 bonus!" : "+\(mgScore) ★  coins")
-        c.fontName = "AvenirNext-Heavy"; c.fontSize = 18; c.fontColor = Palette.crystal
+        c.fontName = Theme.display; c.fontSize = 20; c.fontColor = Palette.crystal
         c.position = CGPoint(x: 0, y: -24); card.addChild(c)
         let go = RichLabel(text: "tap to continue ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
         go.position = CGPoint(x: 0, y: -68); card.addChild(go)

@@ -5,13 +5,13 @@ import UIKit
 /// glyph missing from their font (every emoji, ★, ♥, ⚡, ▶ …) as a "?" box, so
 /// these are drawn with Core Graphics instead and never depend on fonts.
 enum GlyphIcon: String, CaseIterable {
-    case heart, bolt, star, sparkle, burst, play, back, check, cross, coin, magnet, lock
+    case heart, bolt, star, starOutline, sparkle, burst, play, back, check, cross, coin, magnet, lock
     case speaker, muted, boot, wind, shield, battery, target, flame, cart, home, map
     case stats, pie, car, mask
 
     static let lookup: [Character: GlyphIcon] = [
         "♥": .heart, "❤": .heart, "❤️": .heart, "💔": .heart, "🐶": .heart,
-        "⚡": .bolt, "★": .star, "⭐": .star, "⭐️": .star, "🦸": .star, "🎉": .star,
+        "⚡": .bolt, "★": .star, "☆": .starOutline, "⭐": .star, "⭐️": .star, "🦸": .star, "🎉": .star,
         "✦": .sparkle, "✨": .sparkle, "💫": .sparkle, "💥": .burst,
         "▶": .play, "▸": .play, "◂": .back, "✓": .check, "✕": .cross,
         "🪙": .coin, "💰": .coin, "🧲": .magnet, "🔒": .lock,
@@ -25,6 +25,7 @@ enum GlyphIcon: String, CaseIterable {
     var intrinsicColor: UIColor? {
         switch self {
         case .star, .coin: return UIColor(red: 1.0, green: 0.80, blue: 0.20, alpha: 1)
+        case .starOutline: return UIColor(red: 0.55, green: 0.57, blue: 0.68, alpha: 1)
         case .flame: return UIColor(red: 1.0, green: 0.50, blue: 0.15, alpha: 1)
         case .pie: return UIColor(red: 0.93, green: 0.68, blue: 0.35, alpha: 1)
         default: return nil
@@ -77,8 +78,11 @@ enum GlyphIcon: String, CaseIterable {
             p.addLines(between: [CGPoint(x: 3, y: 11), CGPoint(x: -7, y: -1), CGPoint(x: -1, y: -1),
                                  CGPoint(x: -3, y: -11), CGPoint(x: 7, y: 2), CGPoint(x: 1, y: 2)])
             p.closeSubpath(); c.addPath(p); c.fillPath()
-        case .star:
-            c.addPath(star(points: 5, outer: 11, inner: 4.8)); c.fillPath()
+        case .star, .starOutline:
+            // Toy-set star: gold fill + ink outline (matches the HUD's ToonIcon).
+            let sp = star(points: 5, outer: 10.4, inner: 4.7)
+            c.addPath(sp); c.fillPath()
+            c.addPath(sp); c.setStrokeColor(Palette.ink.cgColor); c.setLineWidth(2.0); c.strokePath()
         case .sparkle:
             c.addPath(star(points: 4, outer: 11, inner: 3)); c.fillPath()
         case .burst:
@@ -99,9 +103,11 @@ enum GlyphIcon: String, CaseIterable {
             c.move(to: CGPoint(x: -7, y: 7)); c.addLine(to: CGPoint(x: 7, y: -7))
             c.move(to: CGPoint(x: 7, y: 7)); c.addLine(to: CGPoint(x: -7, y: -7)); c.strokePath()
         case .coin:
-            c.fillEllipse(in: CGRect(x: -10, y: -10, width: 20, height: 20))
-            c.setStrokeColor(dark); c.setLineWidth(2)
-            c.strokeEllipse(in: CGRect(x: -6.5, y: -6.5, width: 13, height: 13))
+            c.fillEllipse(in: CGRect(x: -9.6, y: -9.6, width: 19.2, height: 19.2))
+            c.setStrokeColor(dark); c.setLineWidth(1.8)
+            c.strokeEllipse(in: CGRect(x: -5.8, y: -5.8, width: 11.6, height: 11.6))
+            c.setStrokeColor(Palette.ink.cgColor); c.setLineWidth(2.0)
+            c.strokeEllipse(in: CGRect(x: -9.6, y: -9.6, width: 19.2, height: 19.2))
         case .magnet:
             c.setLineWidth(5); c.setLineCap(.butt)
             c.addArc(center: CGPoint(x: 0, y: -1), radius: 6.5, startAngle: .pi, endAngle: 0, clockwise: false)
@@ -209,11 +215,20 @@ final class RichLabel: SKNode {
     var fontColor: SKColor? = .white { didSet { if fontColor != oldValue { relayout() } } }
     var horizontalAlignmentMode: SKLabelHorizontalAlignmentMode = .center { didSet { relayout() } }
     var verticalAlignmentMode: SKLabelVerticalAlignmentMode = .baseline { didSet { relayout() } }
+    /// Optional hard drop shadow (toon "sticker" text that reads over the busy world).
+    var shadowColor: SKColor? { didSet { if shadowColor != oldValue { relayout() } } }
+    var shadowOffset = CGVector(dx: 0, dy: -2) { didSet { if shadowOffset != oldValue { relayout() } } }
 
     private let content = SKNode()
+    private let shadowContent = SKNode()
+    /// Color used by the current layout pass (the shadow pass overrides it).
+    private var passColor: SKColor?
+    private var shadowPass = false
 
     init(text: String? = nil) {
         super.init()
+        shadowContent.zPosition = -0.01
+        addChild(shadowContent)
         addChild(content)
         self.text = text
         relayout()
@@ -252,13 +267,13 @@ final class RichLabel: SKNode {
 
     private func plainLabel(_ s: String) -> SKLabelNode {
         let l = SKLabelNode(text: s)
-        l.fontName = fontName; l.fontSize = fontSize; l.fontColor = fontColor ?? .white
+        l.fontName = fontName; l.fontSize = fontSize; l.fontColor = passColor ?? fontColor ?? .white
         return l
     }
 
     /// Lays out one line of runs left-to-right from x = 0; returns its width.
     private func buildLine(_ parts: [Run], into node: SKNode, vmode: SKLabelVerticalAlignmentMode) -> CGFloat {
-        let color = fontColor ?? .white
+        let color = passColor ?? fontColor ?? .white
         let gap = fontSize * 0.12
         var x: CGFloat = 0
         for (i, run) in parts.enumerated() {
@@ -274,6 +289,7 @@ final class RichLabel: SKNode {
                 if !prevSpace { x += gap }
                 let sp = SKSpriteNode(texture: icon.texture(size: fontSize * UIScreen.main.scale, color: color))
                 sp.size = CGSize(width: fontSize, height: fontSize)
+                if shadowPass { sp.color = color; sp.colorBlendFactor = 1; sp.alpha = color.cgColor.alpha }
                 sp.anchorPoint = CGPoint(x: 0, y: 0.5)
                 switch vmode {
                 case .center: sp.position.y = 0
@@ -296,7 +312,18 @@ final class RichLabel: SKNode {
 
     private func relayout() {
         content.removeAllChildren()
+        shadowContent.removeAllChildren()
         guard let text, !text.isEmpty else { return }
+        if let sc = shadowColor {
+            passColor = sc; shadowPass = true
+            layoutPass(text, into: shadowContent)
+            passColor = nil; shadowPass = false
+            shadowContent.position = CGPoint(x: shadowOffset.dx, y: shadowOffset.dy)
+        }
+        layoutPass(text, into: content)
+    }
+
+    private func layoutPass(_ text: String, into content: SKNode) {
         let parts = runs(text)
         let hasIcon = parts.contains { if case .icon = $0 { return true }; return false }
         if !hasIcon {
