@@ -154,6 +154,8 @@ final class GameScene: SKScene {
 
     // Autopilot (KAIDITYA_DEMO=1)
     private let demoMode = GameScene.debugEnv("KAIDITYA_DEMO") == "1"
+    /// KAIDITYA_CLEAN=1: trailer capture — hide the on-screen controls and HUD (menus/cards still show).
+    private let cleanMode = GameScene.debugEnv("KAIDITYA_CLEAN") == "1"
     private var demoActionTimer: TimeInterval = 0
 
     /// Launch-environment debug hooks (KAIDITYA_*) for screenshots/autopilot.
@@ -2352,6 +2354,13 @@ final class GameScene: SKScene {
     }
 
     // MARK: - Update
+
+    override func didFinishUpdate() {
+        guard cleanMode else { return }
+        let nodes: [SKNode?] = [joystick, controlPanel, hud, objectiveArrow, moveHint,
+                                interactBtn, dashBtn, shieldBtn, disguiseBtn, grappleBtn]
+        for n in nodes { n?.isHidden = true }
+    }
 
     override func update(_ currentTime: TimeInterval) {
         if lastUpdate == 0 { lastUpdate = currentTime }
