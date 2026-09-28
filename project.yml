@@ -23,6 +23,8 @@ targets:
       - path: Resources/Assets.xcassets
       - path: Resources/PrivacyInfo.xcprivacy
         buildPhase: resources
+      - path: Resources/Sprites
+        buildPhase: resources
     info:
       path: Resources/Info.plist
       properties:

@@ -176,7 +176,29 @@ enum CharacterFactory {
     }
 
     /// The big bad: Lord Chow-Chow — a fluffy-but-fearsome super-villain dog.
+    /// Lord Chow-Chow as a Blender sprite (vector version kept as makeVectorVillain).
     static func makeVillain() -> SKNode {
+        let node = SKNode()
+        let shadow = Effects.groundShadow(width: 58, height: 18)
+        shadow.position = CGPoint(x: 0, y: -26); node.addChild(shadow)
+        let sprite = CharacterSprite(.boss, facing: .s)
+        sprite.position = CGPoint(x: 0, y: -26); sprite.name = "sprite"
+        node.addChild(sprite)
+        return node
+    }
+
+    /// A walking sprite character on a ground shadow; the sprite is named "sprite".
+    static func makeSpriteCharacter(_ set: SpriteSet, shadowWidth: CGFloat, footY: CGFloat) -> SKNode {
+        let node = SKNode()
+        let shadow = Effects.groundShadow(width: shadowWidth, height: shadowWidth / 3)
+        shadow.position = CGPoint(x: 0, y: footY); node.addChild(shadow)
+        let sprite = CharacterSprite(set)
+        sprite.position = CGPoint(x: 0, y: footY); sprite.name = "sprite"
+        node.addChild(sprite)
+        return node
+    }
+
+    static func makeVectorVillain() -> SKNode {
         let node = SKNode()
         let fur = SKColor(red: 0.40, green: 0.26, blue: 0.50, alpha: 1)
         let furDark = fur.darker
@@ -343,6 +365,28 @@ enum CharacterFactory {
 
     /// Top-down car (points "up"). `hero` adds a little K roof + cape-red accents.
     static func makeCar(body color: SKColor, hero: Bool = false) -> SKNode {
+        return spriteVehicle(hero ? "car_hero" : "car_traffic_" + trafficColorName(color), shadow: CGSize(width: 56, height: 80))
+    }
+
+    /// Nearest pre-rendered traffic paint for an arbitrary body color.
+    private static func trafficColorName(_ c: SKColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: &a)
+        if abs(r - g) < 0.08 && abs(g - b) < 0.08 { return "white" }
+        if r > 0.8 && g > 0.65 { return "yellow" }
+        return b > r ? "blue" : "red"
+    }
+
+    /// Blender-rendered vehicle (points up) over a soft ground shadow.
+    private static func spriteVehicle(_ name: String, shadow size: CGSize) -> SKNode {
+        let node = SKNode()
+        let shadow = Effects.groundShadow(width: size.width, height: size.height)
+        shadow.alpha = 0.2; shadow.position = CGPoint(x: 3, y: -6); node.addChild(shadow)
+        node.addChild(SKSpriteNode.vehicle(name))
+        return node
+    }
+
+    static func makeVectorCar(body color: SKColor, hero: Bool = false) -> SKNode {
         let node = SKNode()
         let shadow = Effects.groundShadow(width: 56, height: 80)
         shadow.alpha = 0.18; shadow.position = CGPoint(x: 0, y: -6); node.addChild(shadow)
@@ -375,6 +419,11 @@ enum CharacterFactory {
 
     /// Top-down boat (points up). `big`/`villain` for the chased speedboat.
     static func makeBoat(body color: SKColor, hero: Bool = false, big: Bool = false) -> SKNode {
+        let name = hero ? "boat_hero" : (big ? "boat_villain" : "barge")
+        return spriteVehicle(name, shadow: big ? CGSize(width: 80, height: 130) : CGSize(width: 60, height: 104))
+    }
+
+    static func makeVectorBoat(body color: SKColor, hero: Bool = false, big: Bool = false) -> SKNode {
         let node = SKNode()
         let scale: CGFloat = big ? 1.3 : 1.0
         let hull = SKShapeNode(path: {
@@ -408,6 +457,12 @@ enum CharacterFactory {
 
     /// Lord Chow-Chow's getaway truck (bigger, menacing).
     static func makeTruck() -> SKNode {
+        let node = spriteVehicle("truck_villain", shadow: CGSize(width: 72, height: 110))
+        node.name = "truck"
+        return node
+    }
+
+    static func makeVectorTruck() -> SKNode {
         let node = SKNode()
         let shadow = Effects.groundShadow(width: 72, height: 110)
         shadow.alpha = 0.2; node.addChild(shadow)

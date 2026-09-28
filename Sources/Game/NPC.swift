@@ -13,7 +13,8 @@ final class NPC: SKNode {
         self.displayName = name
         super.init()
 
-        let body = CharacterFactory.makeNPC(tint: tint)
+        let body = SpriteSet.npcs[id].map { CharacterFactory.makeSpriteCharacter($0, shadowWidth: 30, footY: -16) }
+            ?? CharacterFactory.makeNPC(tint: tint)
         body.zPosition = ZLayer.characters
         addChild(body)
 

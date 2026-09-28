@@ -400,6 +400,7 @@ final class GameScene: SKScene {
     // MARK: - Level loading
 
     private func loadLevel(_ idx: Int) {
+        SpriteSet.preload()
         levelIndex = idx
         level = Levels.all[idx]
         inHub = false

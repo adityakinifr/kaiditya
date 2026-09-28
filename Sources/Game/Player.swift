@@ -2,7 +2,12 @@ import SpriteKit
 
 /// Kaiditya. Holds the visual node + hero stats (energy, shield, costume state).
 final class Player: SKNode {
-    let visual: SKNode
+    /// Container for whichever body is showing (Blender sprite or the vector fallback).
+    let visual = SKNode()
+    /// Vector-drawn hero: used for disguise mode and costumes without rendered sprites yet.
+    private let vectorBody: SKNode
+    private let sprite = CharacterSprite(.hero)
+    private var usingSprite: Bool { !sprite.isHidden }
     private let shieldBubble: SKShapeNode
     private let heroShadow: SKShapeNode
     private(set) var carNode: SKNode?
@@ -24,7 +29,7 @@ final class Player: SKNode {
     private var lastFacing = CGVector(dx: 0, dy: -1)
 
     override init() {
-        visual = CharacterFactory.makeHero()
+        vectorBody = CharacterFactory.makeHero()
         shieldBubble = SKShapeNode(circleOfRadius: 34)
         heroShadow = Effects.groundShadow(width: 34, height: 12)
         super.init()
@@ -34,6 +39,9 @@ final class Player: SKNode {
         addChild(heroShadow)
 
         visual.zPosition = ZLayer.characters
+        visual.addChild(vectorBody)
+        sprite.position = CGPoint(x: 0, y: -16)   // feet on the ground shadow
+        visual.addChild(sprite)
         addChild(visual)
 
         shieldBubble.fillColor = SKColor(red: 0.3, green: 0.7, blue: 1, alpha: 0.18)
@@ -55,16 +63,20 @@ final class Player: SKNode {
     func setCostume(_ on: Bool) {
         inCostume = on
         let costume = Economy.equippedCostume
+        // Rendered sprite covers the classic suit; other looks fall back to vector art.
+        let useSprite = on && costume == .classic
+        sprite.isHidden = !useSprite
+        vectorBody.isHidden = useSprite
         // Hero-only parts: cape, mask, chest emblem.
         for name in ["cape", "mask", "emblem"] {
-            visual.enumerateChildNodes(withName: name) { node, _ in node.isHidden = !on }
+            vectorBody.enumerateChildNodes(withName: name) { node, _ in node.isHidden = !on }
         }
         // Cape uses the equipped costume color.
-        if let cape = visual.childNode(withName: "cape") as? SKShapeNode {
+        if let cape = vectorBody.childNode(withName: "cape") as? SKShapeNode {
             cape.fillColor = costume.cape; cape.strokeColor = costume.cape.darker
         }
         // The suit uses the costume color in hero mode, plain clothes when undercover.
-        if let suit = visual.childNode(withName: "suit") as? SKShapeNode {
+        if let suit = vectorBody.childNode(withName: "suit") as? SKShapeNode {
             let civil = SKColor(red: 0.55, green: 0.6, blue: 0.5, alpha: 1)
             suit.fillColor = on ? costume.suit : civil
             suit.strokeColor = (on ? costume.suit : civil).darker
@@ -112,13 +124,14 @@ final class Player: SKNode {
     func faceMovement(_ v: CGVector) {
         guard v.dx != 0 || v.dy != 0 else { return }
         lastFacing = v
-        // Flip the hero to face left/right of travel.
+        sprite.update(velocity: v, frameTime: isDashing ? 0.07 : 0.12)
+        // Flip the vector hero to face left/right of travel.
         if abs(v.dx) > 0.05 {
-            visual.xScale = v.dx < 0 ? -1 : 1
+            vectorBody.xScale = v.dx < 0 ? -1 : 1
         }
-        // Little bob while walking.
-        if action(forKey: "bob") == nil {
-            visual.run(.repeatForever(.sequence([
+        // Little bob while walking (vector body; the sprite has a real walk cycle).
+        if vectorBody.action(forKey: "bob") == nil {
+            vectorBody.run(.repeatForever(.sequence([
                 .moveBy(x: 0, y: 2.5, duration: 0.16),
                 .moveBy(x: 0, y: -2.5, duration: 0.16)
             ])), withKey: "bob")
@@ -126,8 +139,9 @@ final class Player: SKNode {
     }
 
     func stopWalk() {
-        removeAction(forKey: "bob")
-        visual.removeAction(forKey: "bob")
+        vectorBody.removeAction(forKey: "bob")
+        vectorBody.position = .zero
+        sprite.update(velocity: .zero)
     }
 
     func update(dt: TimeInterval) {
@@ -212,8 +226,11 @@ final class Player: SKNode {
         shieldBubble.alpha = 1
         removeAllActions()
         visual.removeAllActions()
+        vectorBody.removeAllActions()
         visual.position = .zero
-        visual.xScale = 1
+        vectorBody.position = .zero
+        vectorBody.xScale = 1
+        sprite.update(velocity: CGVector(dx: 0, dy: -1)); sprite.update(velocity: .zero)
         zRotation = 0
         setDriving(false)
         setStar(false)
