@@ -1,0 +1,26 @@
+{
+  "name": "kaiditya-sizzle",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio",
+    "render:vertical": "remotion render SizzleVertical ../Kaiditya_Sizzle_Vertical_1080x1920.mp4",
+    "render:landscape": "remotion render SizzleLandscape ../Kaiditya_Sizzle_Landscape_1920x1080.mp4"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.529",
+    "@remotion/cli": "^4.0.529",
+    "@remotion/fonts": "^4.0.529",
+    "@remotion/media-utils": "^4.0.529",
+    "@remotion/renderer": "^4.0.529",
+    "@remotion/transitions": "^4.0.529",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.529"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
