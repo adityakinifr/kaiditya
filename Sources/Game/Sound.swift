@@ -21,6 +21,10 @@ final class SoundFX {
         muted = UserDefaults.standard.bool(forKey: "kaiditya.muted")
         enabled = !muted
         musicEnabled = !muted
+        #if DEBUG
+        // KAIDITYA_SILENT=1: screenshot runs make no sound, but the mute icon still shows "on".
+        if ProcessInfo.processInfo.environment["KAIDITYA_SILENT"] == "1" { enabled = false; musicEnabled = false }
+        #endif
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, options: [.mixWithOthers])
         try? session.setActive(true)

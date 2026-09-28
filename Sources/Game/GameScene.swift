@@ -290,10 +290,11 @@ final class GameScene: SKScene {
                 }
             }
         }
-        if GameScene.debugEnv("KAIDITYA_MAP") == "1" {
+        if let mode = GameScene.debugEnv("KAIDITYA_MAP") {
+            // 1 = map + stats card, 2 = map only.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.showMap()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showStats() }
+                if mode == "1" { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.showStats() } }
             }
         }
         DispatchQueue.main.async { [weak self] in _ = self?.becomeFirstResponder() }
@@ -947,7 +948,7 @@ final class GameScene: SKScene {
         villain = v
         let l = RichLabel(text: "LORD CHOW-CHOW")
         l.fontName = "AvenirNext-Heavy"; l.fontSize = 14; l.fontColor = biome.signColor
-        l.position = CGPoint(x: 0, y: 60); l.zPosition = ZLayer.fx
+        l.position = CGPoint(x: 0, y: 60); l.zPosition = ZLayer.fx; l.name = "nameplate"
         v.addChild(l)
     }
 
@@ -3286,6 +3287,7 @@ final class GameScene: SKScene {
         guard let v = villain else { return }
         bossFightActive = true
         hud.showBossBar(name: "LORD CHOW-CHOW", total: 3 * level.bossPhases)
+        v.childNode(withName: "nameplate")?.run(.fadeOut(withDuration: 0.3))   // the boss bar names him now
         SoundFX.shared.playMusic("boss", volume: 0.55)
         v.run(bossDodge(), withKey: "dodge")
         // Attack scheduler: patterns escalate with the phase.
