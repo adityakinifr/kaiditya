@@ -4,6 +4,7 @@ import SpriteKit
 /// unshielded, costumed hero, it raises the alarm. Sneaky Sasquatch's ranger.
 final class Minion: SKNode {
     private let body: SKNode
+    private let sprite: CharacterSprite?
     private let cone: SKShapeNode
     private let innerCone = SKShapeNode()
     private let alertMark = RichLabel(text: "?")
@@ -30,7 +31,9 @@ final class Minion: SKNode {
         self.moveSpeed = speed
         self.visionRange = range
         self.rotating = rotating
-        body = drone ? CharacterFactory.makeDrone() : (rotating ? CharacterFactory.makeSearchlightBase() : CharacterFactory.makeMinion())
+        body = rotating ? CharacterFactory.makeSearchlightBase()
+            : CharacterFactory.makeSpriteCharacter(drone ? .drone : .minion, shadowWidth: 36, footY: -20)
+        sprite = body.childNode(withName: "sprite") as? CharacterSprite
         cone = SKShapeNode()
         super.init()
 
@@ -154,10 +157,12 @@ final class Minion: SKNode {
         let dist = sqrt(dx * dx + dy * dy)
         if dist < 6 {
             wpIndex = (wpIndex + 1) % waypoints.count
+            if waypoints.count < 2 { sprite?.update(velocity: .zero) }
         } else {
             let vx = dx / dist
             let vy = dy / dist
             facing = CGVector(dx: vx, dy: vy)
+            sprite?.update(velocity: facing)
             position.x += vx * moveSpeed * CGFloat(dt)
             position.y += vy * moveSpeed * CGFloat(dt)
             redrawCone()
