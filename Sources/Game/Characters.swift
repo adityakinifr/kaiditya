@@ -312,7 +312,19 @@ enum CharacterFactory {
 
     /// Cover object you can hide inside/behind. Returns the node AND its
     /// hide-rect (in node-local space, centered on origin).
-    static func makeCover(shape: CoverShape, fill: SKColor, detail: SKColor) -> (node: SKNode, rect: CGRect) {
+    static func makeCover(shape: CoverShape, fill: SKColor, detail: SKColor, variant: Int = 0) -> (node: SKNode, rect: CGRect) {
+        // Blender props (same hide rects as the vector versions, so gameplay is unchanged).
+        switch shape {
+        case .bush where Props.available("bush_a"):
+            return (Props.make("bush_a", scale: 1.4), CGRect(x: -46, y: -32, width: 92, height: 64))
+        case .crate where Props.available("crate_a"):
+            let name = ["crate_a", "crate_b", "crate_a", "crate_stack"][variant % 4]
+            return (Props.make(Props.available(name) ? name : "crate_a", scale: name == "crate_stack" ? 0.95 : 1.05),
+                    CGRect(x: -39, y: -35, width: 78, height: 70))
+        case .pillar where Props.available("pillar"):
+            return (Props.make("pillar", scale: 0.9), CGRect(x: -32, y: -32, width: 64, height: 64))
+        default: break
+        }
         let node = SKNode()
         let shadow = Effects.groundShadow(width: 96, height: 26)
         shadow.position = CGPoint(x: 0, y: -24)
@@ -487,6 +499,7 @@ enum CharacterFactory {
     /// kid's-sketchbook cannon-bots: boxed metal housing, corner bolts and a
     /// big glowing red scanning eye.
     static func makeSearchlightBase() -> SKNode {
+        if Props.available("searchlight_base") { return Props.make("searchlight_base", scale: 0.9) }
         let node = SKNode()
         let metal = SKColor(white: 0.30, alpha: 1)
         // Boxed housing.
@@ -515,6 +528,11 @@ enum CharacterFactory {
     /// A little legged cannon-bot that anchors a laser beam — inspired by a kid's
     /// sketchbook "shooter": boxy body, stubby legs, a barrel + glowing muzzle.
     static func makeLaserTurret(facingRight: Bool) -> SKNode {
+        if Props.available("laser_emitter") {
+            let n = Props.make("laser_emitter", scale: 1.1)
+            n.xScale *= facingRight ? 1 : -1
+            return n
+        }
         let node = SKNode()
         let metal = SKColor(white: 0.30, alpha: 1)
         let dir: CGFloat = facingRight ? 1 : -1
@@ -547,6 +565,18 @@ enum CharacterFactory {
     /// A stationary electric trap — telegraphed warning ring + crackling core.
     /// Touching it costs the hero a life.
     static func makeStaticTrap() -> SKNode {
+        if Props.available("trap") {
+            let n = Props.make("trap", scale: 1.3)
+            // Keep the pulsing danger ring: the sprite alone doesn't say "don't step here".
+            let ring = SKShapeNode(circleOfRadius: 26 / (SpriteSet.worldScale * 1.3))
+            ring.strokeColor = Palette.heroRed; ring.lineWidth = 6; ring.fillColor = Palette.heroRed.withAlphaComponent(0.08)
+            ring.yScale = 0.6; ring.zPosition = -0.5
+            ring.run(.repeatForever(.sequence([.group([.scale(to: 1.15, duration: 0.6), .fadeAlpha(to: 0.25, duration: 0.6)]),
+                                               .group([.scale(to: 1.0, duration: 0.01), .fadeAlpha(to: 0.9, duration: 0.01)])])))
+            n.addChild(ring)
+            n.name = "trap"
+            return n
+        }
         let node = SKNode()
         let base = SKShapeNode(circleOfRadius: 16)
         base.fillColor = SKColor(white: 0.22, alpha: 1); base.strokeColor = Palette.heroRed; base.lineWidth = 2
@@ -573,6 +603,17 @@ enum CharacterFactory {
 
     /// A grapple anchor: a post with a glowing ring you can zip to.
     static func makeGrappleAnchor(accent: SKColor) -> SKNode {
+        if Props.available("grapple_anchor") {
+            let n = SKNode()
+            let p = Props.make("grapple_anchor", scale: 1.4); p.position = CGPoint(x: 0, y: -14); n.addChild(p)
+            let tag = RichLabel(text: "ZIP")
+            tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 9; tag.fontColor = accent
+            tag.verticalAlignmentMode = .center; tag.position = CGPoint(x: 0, y: 34)
+            tag.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
+            n.addChild(tag)
+            n.name = "anchor"
+            return n
+        }
         let node = SKNode()
         let post = SKSpriteNode(color: SKColor(white: 0.35, alpha: 1), size: CGSize(width: 8, height: 30))
         post.position = CGPoint(x: 0, y: -15); node.addChild(post)
@@ -593,6 +634,22 @@ enum CharacterFactory {
 
     /// A treasure chest. `glowing` when the daily bonus is available.
     static func makeChest(glowing: Bool) -> SKNode {
+        if Props.available("chest_closed") {
+            let node = SKNode()
+            let p = Props.make("chest_closed", scale: 1.3); p.position = CGPoint(x: 0, y: -12); node.addChild(p)
+            if glowing {
+                let glow = SKSpriteNode(texture: Effects.shadowTex, size: CGSize(width: 110, height: 70))
+                glow.color = Palette.energy; glow.colorBlendFactor = 1; glow.blendMode = .add; glow.alpha = 0.7
+                glow.zPosition = -1; node.addChild(glow)
+                glow.run(.repeatForever(.sequence([.fadeAlpha(to: 0.35, duration: 0.6), .fadeAlpha(to: 0.7, duration: 0.6)])))
+                p.run(.repeatForever(.sequence([.moveBy(x: 0, y: 4, duration: 0.5), .moveBy(x: 0, y: -4, duration: 0.5)])))
+                let spark = RichLabel(text: "✨"); spark.fontSize = 18; spark.position = CGPoint(x: 0, y: 38); node.addChild(spark)
+            } else {
+                node.alpha = 0.75
+            }
+            node.name = "chest"
+            return node
+        }
         let node = SKNode()
         let shadow = Effects.groundShadow(width: 60, height: 18); shadow.position = CGPoint(x: 0, y: -22); node.addChild(shadow)
         let brown = SKColor(red: 0.52, green: 0.34, blue: 0.18, alpha: 1)
@@ -617,6 +674,13 @@ enum CharacterFactory {
     }
 
     static func makeCoin() -> SKNode {
+        if Props.available("coin_0") {
+            let n = Props.make("coin_0", scale: 1.25)
+            Props.animate(n, frames: "coin", count: 6, fps: 10)
+            Props.hover(n, amount: 18)
+            n.name = "coin"
+            return n
+        }
         let node = SKNode()
         let c = SKShapeNode(circleOfRadius: 11)
         c.fillColor = Palette.energy; c.strokeColor = Palette.energy.darker; c.lineWidth = 2
@@ -628,6 +692,12 @@ enum CharacterFactory {
     }
 
     static func makeKeycard() -> SKNode {
+        if Props.available("keycard") {
+            let n = Props.make("keycard", scale: 1.6)
+            Props.hover(n, amount: 20)
+            n.name = "keycard"
+            return n
+        }
         let node = SKNode()
         let card = roundedRect(size: CGSize(width: 26, height: 18), corner: 4,
                                color: SKColor(red: 0.95, green: 0.8, blue: 0.2, alpha: 1), stroke: .white, lineWidth: 1.5)
@@ -641,6 +711,16 @@ enum CharacterFactory {
 
     /// Power-up bubble: "magnet" or "star".
     static func makePowerup(_ kind: String) -> SKNode {
+        let tex = kind == "star" ? "powerup_star" : "powerup_magnet"
+        if Props.available(tex) {
+            let n = SKNode()
+            let glow = SKSpriteNode(texture: Effects.shadowTex, size: CGSize(width: 56, height: 56))
+            glow.color = kind == "star" ? Palette.energy : Palette.crystal; glow.colorBlendFactor = 1
+            glow.blendMode = .add; glow.alpha = 0.6; glow.position = CGPoint(x: 0, y: 10); n.addChild(glow)
+            let p = Props.make(tex, scale: 1.5); Props.hover(p, amount: 16); n.addChild(p)
+            n.name = "pu_\(kind)"
+            return n
+        }
         let node = SKNode()
         let ring = SKShapeNode(circleOfRadius: 16)
         ring.fillColor = (kind == "star" ? Palette.energy : Palette.crystal).withAlphaComponent(0.25)
@@ -716,6 +796,16 @@ enum CharacterFactory {
     }
 
     static func makeCrystal() -> SKShapeNode {
+        if Props.available("crystal_0") {
+            // Path-less shape node keeps the existing [SKShapeNode] bookkeeping; the sprite does the drawing.
+            let c = SKShapeNode()
+            let p = Props.make("crystal_0", scale: 1.35); p.position = CGPoint(x: 0, y: -14)
+            Props.animate(p, frames: "crystal", count: 8, fps: 8)
+            Props.hover(p, amount: 18)
+            c.addChild(p)
+            c.name = "crystal"
+            return c
+        }
         let c = SKShapeNode(path: diamondPath(w: 18, h: 26))
         c.fillColor = Palette.crystal
         c.strokeColor = Palette.crystal.lighter

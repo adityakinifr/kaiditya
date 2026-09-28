@@ -15,8 +15,14 @@ art/
     chowchow.py         # Lord Chow-Chow (boss, 384px)
     npc.py              # Mayor Mia / Granny Gold / Tommy (--npc mayor|gran|tommy)
     vehicles.py         # hero car, traffic cars, villain truck, hero boat, villain speedboat, barge
+    props.py            # world props (crates, bushes, tree, cage, generator, pickups ...) + shadow passes
+    tiles.py            # seamless biome floor tiles, path tiles, scatter decals
+    envkit.py           # AO band, Cycles shadow-catcher pass (shared by props/tiles)
     hero_poc.py         # original proof of concept (kept for reference, not built)
   tools/finish.py       # 2x -> 1x Lanczos downsample + contact sheets (needs Pillow)
+  tools/props_post.py   # crop props, compute anchorPoints, write props_manifest.json + previews/props.png
+  tools/tiles_post.py   # seamless wrap-downsample of tiles -> tiles_<biome>.atlas + previews/tiles*.png
+  props_manifest.json   # generated: prop textures, sizes, anchors, footprints; tile names per biome
   previews/             # <asset>_sheet.png contact sheets for review
   .cache/raw/           # raw 2x renders + Blender logs (git-ignored)
 ```
@@ -163,3 +169,18 @@ Copy `minion.py` (the simplest one). Build parts with `C.sphere / C.box / C.cone
 in world rest-pose coordinates, facing -Y and standing on z=0. Parent them to pivot empties
 (hips, shoulders, head), and write a `pose(phase)` function that uses `C.walk_curves`. Then call
 `C.render_character(name, root, pose, opts)` and add the name to `ALL` in `build_all.sh`.
+
+## Props and floor tiles (`art/build_all.sh props tiles`)
+
+* **props** -> `Resources/Sprites/props.atlas`. Every prop `<name>` has a `<name>_shadow`
+  (black RGB, shadow in alpha, falling down-right). Spin sets `coin_0..5` / `crystal_0..7` share
+  `coin_shadow` / `crystal_shadow`. Use the same anchorPoint for a prop and its shadow; tint the
+  shadow violet (`colorBlendFactor = 1`) at ~0.4 alpha under the prop. `art/props_manifest.json`
+  lists each texture's 1x size, anchorPoint (ground-footprint centre) and `footprint_pt`
+  (width x height of the ground rect in world points at worldScale 0.3; height foreshortened by
+  cos 55deg like the tiles), for hide/collision rects.
+* **tiles** -> `Resources/Sprites/tiles_<biome>.atlas` for park, docks, tower, rooftops, lab,
+  sewers, fortress: `<biome>_0..3` (base, seamless against each other in any mix),
+  `<biome>_path_0..1` (walkway strip), `<biome>_decal_*` (transparent scatter). Tiles are
+  233x133 px = 70x40 pt at worldScale 0.3 (`SKTileMapNode` tileSize). The 3x3/5x5 seam checks
+  are in `art/previews/tiles_check_<biome>.png`.

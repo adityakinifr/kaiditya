@@ -29,13 +29,25 @@ final class SpriteSet {
     static let npcs: [String: SpriteSet] = ["mayor": SpriteSet("npc_mayor"), "gran": SpriteSet("npc_gran"),
                                             "kid": SpriteSet("npc_tommy"), "tommy": SpriteSet("npc_tommy")]
     static let vehicles = SKTextureAtlas(named: "vehicles")
+    static let props = SKTextureAtlas(named: "props")
+    private static let propNames = names(in: props)
+
+    /// Texture names in an atlas without extension / scale suffix ("crate_a@2x.png" -> "crate_a").
+    static func names(in atlas: SKTextureAtlas) -> Set<String> {
+        Set(atlas.textureNames.map { n in
+            var b = (n as NSString).deletingPathExtension
+            if let r = b.range(of: "@", options: .backwards) { b = String(b[..<r.lowerBound]) }
+            return b
+        })
+    }
+    static func hasProp(_ name: String) -> Bool { propNames.contains(name) }
 
     /// All sprite art renders at the same pixels-per-unit; this scale matches the old vector sizes.
     static let worldScale: CGFloat = 0.3
 
     static func preload() {
         SKTextureAtlas.preloadTextureAtlasesNamed(["hero", "minion", "drone", "chowchow", "npc_mayor",
-                                                   "npc_gran", "npc_tommy", "vehicles"]) { _, _ in }
+                                                   "npc_gran", "npc_tommy", "vehicles", "props"]) { _, _ in }
     }
 }
 
