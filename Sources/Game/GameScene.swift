@@ -156,6 +156,13 @@ final class GameScene: SKScene {
     private let demoMode = ProcessInfo.processInfo.environment["KAIDITYA_DEMO"] == "1"
     private var demoActionTimer: TimeInterval = 0
 
+    /// KAIDITYA_AT="x,y": art-preview hook that parks the player/camera at a world point.
+    private var debugAt: CGPoint? {
+        guard let v = ProcessInfo.processInfo.environment["KAIDITYA_AT"] else { return nil }
+        let c = v.split(separator: ",").compactMap { Double($0) }
+        return c.count == 2 ? CGPoint(x: c[0], y: c[1]) : nil
+    }
+
     // MARK: - Lifecycle
 
     override func didMove(to view: SKView) {
@@ -176,6 +183,9 @@ final class GameScene: SKScene {
         if ProcessInfo.processInfo.environment["KAIDITYA_HUB"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.cam.childNode(withName: "titleOverlay")?.removeFromParent(); self?.enterHub()
+                if let self, let at = self.debugAt {
+                    self.player.position = at; self.cam.position = self.clampedCamera(at)
+                }
             }
         }
         if let lv = ProcessInfo.processInfo.environment["KAIDITYA_PLAYLEVEL"], let idx = Int(lv) {
@@ -215,6 +225,7 @@ final class GameScene: SKScene {
                     } else if let route = self.level.minionPatrols.first, let m = route.first {
                         self.player.position = CGPoint(x: m.x, y: m.y - 90)
                     }
+                    if let at = self.debugAt { self.player.position = at }
                     self.cam.position = self.clampedCamera(self.player.position)
                     // Preview the live boss fight (bar + hint + HIT button) on boss levels.
                     if self.level.hasBoss { self.objective = .boss; self.beginBossFight() }
@@ -773,8 +784,53 @@ final class GameScene: SKScene {
         worldNode.addChild(strip)
     }
 
+    /// Blender building style for a spec: named buildings by label, plain houses by biome / roof hue.
+    private func buildingStyle(_ spec: BuildingSpec) -> String {
+        switch spec.label {
+        case "HQ": return "bld_hq"
+        case "SHOP": return "bld_shop"
+        case "ARCADE": return "bld_arcade"
+        case "DEPOT": return "bld_warehouse"
+        case "LAIR": return "bld_lair"
+        case "ROOF": return "bld_rooftop"
+        case "LAB": return "bld_lab"
+        case "PUMP": return "bld_pumphouse"
+        case "FORTRESS": return "bld_fortress"
+        case "START", "ENTRY": return "bld_bunker"
+        default: break
+        }
+        switch biome.tileKey {
+        case "docks": return "bld_warehouse"
+        case "tower": return "bld_lair"
+        case "rooftops": return "bld_rooftop"
+        case "lab": return "bld_lab"
+        case "sewers": return "bld_pumphouse"
+        case "fortress": return "bld_bunker"
+        default: break
+        }
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        spec.roof.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        switch h * 360 {
+        case ..<20, 340...: return "bld_house_red"
+        case ..<50: return "bld_house_orange"
+        case ..<170: return "bld_house_green"
+        case ..<260: return "bld_house_blue"
+        default: return "bld_house_purple"
+        }
+    }
+
     private func addBuilding(_ spec: BuildingSpec) {
         let p = spec.pos, sz = spec.size
+        let style = buildingStyle(spec)
+        if let node = Buildings.make(style, width: sz.width, label: spec.label), let bs = Buildings.spec[style] {
+            // Collision stays the spec rect. The sprite matches its width; align front edges so any depth
+            // mismatch overhangs at the back, then y-sort by the front edge.
+            let depth = bs.footprint.height * sz.width / bs.footprint.width
+            node.position = CGPoint(x: p.x, y: p.y - sz.height/2 + depth/2)
+            node.zPosition = ZLayer.depth(p.y - sz.height/2, worldHeight: worldSize.height)
+            worldNode.addChild(node)
+            return
+        }
         let shadow = Effects.groundShadow(width: sz.width * 1.05, height: 26)
         shadow.position = CGPoint(x: p.x, y: p.y - sz.height/2 - 6)
         shadow.zPosition = ZLayer.buildings - 0.5

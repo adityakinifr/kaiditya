@@ -47,7 +47,7 @@ final class SpriteSet {
 
     static func preload() {
         SKTextureAtlas.preloadTextureAtlasesNamed(["hero", "minion", "drone", "chowchow", "npc_mayor",
-                                                   "npc_gran", "npc_tommy", "vehicles", "props"]) { _, _ in }
+                                                   "npc_gran", "npc_tommy", "vehicles", "props", "buildings"]) { _, _ in }
     }
 }
 

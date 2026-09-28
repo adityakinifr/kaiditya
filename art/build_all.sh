@@ -7,9 +7,10 @@
 #   QUICK=1 art/build_all.sh hero    # idle frames for 4 directions only (fast look-dev)
 #   BLENDER=/path/to/Blender art/build_all.sh
 #
-# Assets: hero minion drone chowchow npc_mayor npc_gran npc_tommy vehicles props tiles
+# Assets: hero minion drone chowchow npc_mayor npc_gran npc_tommy vehicles props tiles buildings
 #   props -> Resources/Sprites/props.atlas + art/props_manifest.json + art/previews/props.png
 #   tiles -> Resources/Sprites/tiles_<biome>.atlas + manifest "tiles" + art/previews/tiles*.png
+#   buildings -> Resources/Sprites/buildings.atlas + art/buildings_manifest.json + art/previews/buildings.png
 set -euo pipefail
 
 ART="$(cd "$(dirname "$0")" && pwd)"
@@ -18,7 +19,7 @@ BLENDER="${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}"
 OUT_ROOT="$ROOT/Resources/Sprites"
 RAW_ROOT="$ART/.cache/raw"
 PREVIEWS="$ART/previews"
-ALL=(hero minion drone chowchow npc_mayor npc_gran npc_tommy vehicles props tiles)
+ALL=(hero minion drone chowchow npc_mayor npc_gran npc_tommy vehicles props tiles buildings)
 ASSETS=("$@"); [ ${#ASSETS[@]} -eq 0 ] && ASSETS=("${ALL[@]}")
 
 # A python3 that has Pillow (for Lanczos downsampling + contact sheets).
@@ -46,7 +47,7 @@ for asset in "${ASSETS[@]}"; do
   raw="$RAW_ROOT/$asset"
   mkdir -p "$raw"
   # props/tiles: drop stale raw renders so removed sprites don't linger in the atlases
-  case "$asset" in props|tiles) find "$raw" -maxdepth 1 -name '*.png' -delete ;; esac
+  case "$asset" in props|tiles|buildings) find "$raw" -maxdepth 1 -name '*.png' -delete ;; esac
   t=$(date +%s)
   echo "==> $asset ($script)"
   "$BLENDER" -b --factory-startup -P "$ART/blender/$script" -- --out "$raw" ${args[@]+"${args[@]}"} ${EXTRA[@]+"${EXTRA[@]}"} \
@@ -59,6 +60,11 @@ for asset in "${ASSETS[@]}"; do
       find "$OUT_ROOT/props.atlas" -maxdepth 1 -name '*.png' -delete 2>/dev/null || true
       "$PY" "$ART/tools/finish.py" props "$raw" "$OUT_ROOT/props.atlas" "$RAW_ROOT/props_finish_sheet.png"
       "$PY" "$ART/tools/props_post.py" "$raw" "$OUT_ROOT/props.atlas" "$MANIFEST" "$PREVIEWS/props.png" --hero "$HERO_REF"
+      ;;
+    buildings)
+      # 2x -> 1x Lanczos (finish.downsample), crop + anchors + sign/door offsets + manifest + contact sheet
+      find "$OUT_ROOT/buildings.atlas" -maxdepth 1 -name '*.png' -delete 2>/dev/null || true
+      "$PY" "$ART/tools/buildings_post.py" "$raw" "$OUT_ROOT/buildings.atlas" "$ART/buildings_manifest.json" "$PREVIEWS/buildings.png" --hero "$HERO_REF"
       ;;
     tiles)
       # seamless wrap-downsample -> one atlas per biome, check sheets, manifest "tiles" section
