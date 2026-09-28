@@ -33,7 +33,7 @@ enum CharacterFactory {
         emblem.name = "emblem"
         node.addChild(emblem)
 
-        let k = SKLabelNode(text: "K")
+        let k = RichLabel(text: "K")
         k.fontName = "AvenirNext-Heavy"
         k.fontSize = 11
         k.fontColor = Palette.heroBlue
@@ -367,7 +367,7 @@ enum CharacterFactory {
         if hero {
             let stripe = roundedRect(size: CGSize(width: 10, height: 60), corner: 3, color: Palette.energy.withAlphaComponent(0.85))
             node.addChild(stripe)
-            let k = SKLabelNode(text: "K"); k.fontName = "AvenirNext-Heavy"; k.fontSize = 16; k.fontColor = color
+            let k = RichLabel(text: "K"); k.fontName = "AvenirNext-Heavy"; k.fontSize = 16; k.fontColor = color
             k.verticalAlignmentMode = .center; k.position = CGPoint(x: 0, y: 0); node.addChild(k)
         }
         return node
@@ -396,7 +396,7 @@ enum CharacterFactory {
                                      color: SKColor(red: 0.6, green: 0.85, blue: 0.95, alpha: 0.95))
         windshield.position = CGPoint(x: 0, y: 8 * scale); node.addChild(windshield)
         if hero {
-            let k = SKLabelNode(text: "K"); k.fontName = "AvenirNext-Heavy"; k.fontSize = 14; k.fontColor = .white
+            let k = RichLabel(text: "K"); k.fontName = "AvenirNext-Heavy"; k.fontSize = 14; k.fontColor = .white
             k.verticalAlignmentMode = .center; k.position = CGPoint(x: 0, y: -8); node.addChild(k)
         }
         if big {
@@ -527,7 +527,7 @@ enum CharacterFactory {
         let hook = SKShapeNode(circleOfRadius: 5)
         hook.strokeColor = .white; hook.lineWidth = 2; hook.fillColor = .clear
         node.addChild(hook)
-        let tag = SKLabelNode(text: "ZIP")
+        let tag = RichLabel(text: "ZIP")
         tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 9; tag.fontColor = accent
         tag.verticalAlignmentMode = .center; tag.position = CGPoint(x: 0, y: 22)
         tag.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
@@ -553,7 +553,7 @@ enum CharacterFactory {
             let glow = SKShapeNode(circleOfRadius: 38); glow.fillColor = Palette.energy.withAlphaComponent(0.22)
             glow.strokeColor = .clear; glow.glowWidth = 6; glow.zPosition = -1; node.addChild(glow)
             node.run(.repeatForever(.sequence([.moveBy(x: 0, y: 4, duration: 0.5), .moveBy(x: 0, y: -4, duration: 0.5)])))
-            let spark = SKLabelNode(text: "✨"); spark.fontSize = 18; spark.position = CGPoint(x: 0, y: 38); node.addChild(spark)
+            let spark = RichLabel(text: "✨"); spark.fontSize = 18; spark.position = CGPoint(x: 0, y: 38); node.addChild(spark)
         } else {
             node.alpha = 0.6
         }
@@ -566,7 +566,7 @@ enum CharacterFactory {
         let c = SKShapeNode(circleOfRadius: 11)
         c.fillColor = Palette.energy; c.strokeColor = Palette.energy.darker; c.lineWidth = 2
         node.addChild(c)
-        let star = SKLabelNode(text: "★"); star.fontSize = 12; star.fontColor = Palette.energy.darker
+        let star = RichLabel(text: "★"); star.fontSize = 12; star.fontColor = Palette.energy.darker
         star.verticalAlignmentMode = .center; node.addChild(star)
         node.name = "coin"
         return node
@@ -592,7 +592,7 @@ enum CharacterFactory {
         ring.strokeColor = (kind == "star" ? Palette.energy : Palette.crystal)
         ring.lineWidth = 2.5; ring.glowWidth = 4
         node.addChild(ring)
-        let glyph = SKLabelNode(text: kind == "star" ? "⭐️" : "🧲")
+        let glyph = RichLabel(text: kind == "star" ? "⭐️" : "🧲")
         glyph.fontSize = 18; glyph.verticalAlignmentMode = .center; node.addChild(glyph)
         node.name = "pu_\(kind)"
         node.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.5), .scale(to: 1.0, duration: 0.5)])))

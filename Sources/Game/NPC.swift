@@ -5,8 +5,8 @@ import SpriteKit
 final class NPC: SKNode {
     let id: String
     let displayName: String
-    private let nameTag = SKLabelNode()
-    private let bang = SKLabelNode(text: "!")
+    private let nameTag = RichLabel()
+    private let bang = RichLabel(text: "!")
 
     init(id: String, name: String, tint: SKColor) {
         self.id = id

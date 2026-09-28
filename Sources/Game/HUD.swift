@@ -7,31 +7,31 @@ final class HUD: SKNode {
     // Mission panel (container + redrawn background)
     private let missionContainer = SKNode()
     private var missionBG = SKShapeNode()
-    private let levelLabel = SKLabelNode()
-    private let missionTitle = SKLabelNode()
-    private let missionHint = SKLabelNode()
-    private let missionProgress = SKLabelNode()
+    private let levelLabel = RichLabel()
+    private let missionTitle = RichLabel()
+    private let missionHint = RichLabel()
+    private let missionProgress = RichLabel()
 
     // Top-right cluster
     private let crystalIcon: SKShapeNode
-    private let crystalLabel = SKLabelNode()
+    private let crystalLabel = RichLabel()
     private let coinIcon: SKShapeNode
-    private let coinLabel = SKLabelNode()
+    private let coinLabel = RichLabel()
     private let energyBarBG: SKShapeNode
     private let energyBarFill: SKShapeNode
     private var energyBarWidth: CGFloat = 120
 
     private let toastBanner = SKNode()
     private var toastBG = SKShapeNode()
-    private let toast = SKLabelNode()
+    private let toast = RichLabel()
 
     // Boss health bar (shown during a boss fight)
     private let bossBar = SKNode()
     private var bossBarBG = SKShapeNode()
     private var bossBarFill = SKShapeNode()
-    private let bossName = SKLabelNode()
+    private let bossName = RichLabel()
     private var bossBarWidth: CGFloat = 220
-    private let bossHint = SKLabelNode()
+    private let bossHint = RichLabel()
 
     // Lives (hearts)
     private let livesNode = SKNode()
@@ -87,7 +87,7 @@ final class HUD: SKNode {
         missionContainer.addChild(missionHint)
 
         missionProgress.fontName = "AvenirNext-Heavy"
-        missionProgress.fontSize = 18
+        missionProgress.fontSize = 15
         missionProgress.fontColor = Palette.crystal
         missionProgress.horizontalAlignmentMode = .right
         missionProgress.verticalAlignmentMode = .center
@@ -155,7 +155,7 @@ final class HUD: SKNode {
     func setLives(_ remaining: Int, max maxLives: Int) {
         livesNode.removeAllChildren()
         for i in 0..<maxLives {
-            let h = SKLabelNode(text: "♥")
+            let h = RichLabel(text: "♥")
             h.fontName = "AvenirNext-Heavy"; h.fontSize = 17
             h.fontColor = i < remaining ? Palette.heroRed : SKColor(white: 0.34, alpha: 1)
             h.verticalAlignmentMode = .center; h.horizontalAlignmentMode = .left
@@ -235,13 +235,13 @@ final class HUD: SKNode {
         missionContainer.position = CGPoint(x: -halfW + pad + panelW/2, y: top - panelH/2)
 
         let textLeft = -panelW/2 + panelInset
-        let progressW: CGFloat = 34
-        levelLabel.position = CGPoint(x: textLeft, y: 30)
-        missionTitle.preferredMaxLayoutWidth = panelW - panelInset * 2 - progressW
-        missionTitle.position = CGPoint(x: textLeft, y: 7)
-        missionHint.preferredMaxLayoutWidth = panelW - panelInset * 2 - progressW
-        missionHint.position = CGPoint(x: textLeft, y: -27)
-        missionProgress.position = CGPoint(x: panelW/2 - panelInset, y: 12)
+        // Progress sits on the header row so the title/hint get the full width.
+        levelLabel.position = CGPoint(x: textLeft, y: 29)
+        missionTitle.preferredMaxLayoutWidth = panelW - panelInset * 2
+        missionTitle.position = CGPoint(x: textLeft, y: 6)
+        missionHint.preferredMaxLayoutWidth = panelW - panelInset * 2
+        missionHint.position = CGPoint(x: textLeft, y: -28)
+        missionProgress.position = CGPoint(x: panelW/2 - panelInset, y: 29)
 
         // Top-right cluster: crystal counter then energy bar below it.
         crystalIcon.position = CGPoint(x: halfW - clusterW + 18, y: top - 14)
@@ -259,7 +259,7 @@ final class HUD: SKNode {
 
         livesNode.position = CGPoint(x: halfW - clusterW + 14, y: top - 90)
 
-        toastRestY = top - 4
+        toastRestY = top - panelH - 30   // below the mission panel, never on top of it
         if toastBanner.action(forKey: "toast") == nil { toastBanner.position = CGPoint(x: 0, y: toastRestY) }
     }
 

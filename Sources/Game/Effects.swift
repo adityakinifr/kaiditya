@@ -119,7 +119,7 @@ enum Effects {
         core.glowWidth = 4
         node.addChild(core)
 
-        let tag = SKLabelNode(text: label)
+        let tag = RichLabel(text: label)
         tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 13; tag.fontColor = accent
         tag.verticalAlignmentMode = .center
         tag.position = CGPoint(x: 0, y: -60)

@@ -131,6 +131,15 @@ final class GameScene: SKScene {
     private var safeTop: CGFloat = 0
     private var safeBottom: CGFloat = 0
     private var caughtCooldown: TimeInterval = 0
+    // Per-run tracking for the 3-star rating + checkpoint respawns.
+    private var timesHit = 0
+    private var levelCoins = 0
+    private var levelTime: TimeInterval = 0
+    private var checkpoint: CGPoint = .zero
+    /// Rescue cages / sabotage generators: stand next to one (as HERO) to fill its ring.
+    private final class ObjectiveSite { let node: SKNode; let ring: SKShapeNode; var progress: Double = 0; var done = false
+        init(node: SKNode, ring: SKShapeNode) { self.node = node; self.ring = ring } }
+    private var sites: [ObjectiveSite] = []
 
     // Dialogue
     private var dialogueCloseCallbacks: [() -> Void] = []
@@ -185,7 +194,7 @@ final class GameScene: SKScene {
                     guard let self else { return }
                     self.cam.childNode(withName: "introOverlay")?.removeFromParent()
                     if self.state == .intro { self.state = .playing }
-                    self.setControlsHidden(false)   // un-hide the HUD for the preview
+                    self.setControlsHidden(false); self.applyControlMode()   // un-hide the HUD for the preview
                     // Move the camera onto the enemies (offset clear of hazards).
                     if self.level.hasBoss {
                         self.player.position = CGPoint(x: self.level.exitPos.x, y: self.level.exitPos.y - 130)
@@ -203,6 +212,13 @@ final class GameScene: SKScene {
                     if self.level.hasBoss { self.objective = .boss; self.beginBossFight() }
                 }
             }
+        }
+        if let lv = ProcessInfo.processInfo.environment["KAIDITYA_COMPLETE"], let idx = Int(lv) {
+            // Screenshot hook: jump straight to a level's clear card (1 coin, clean run).
+            loadLevel(idx); cam.childNode(withName: "introOverlay")?.removeFromParent()
+            levelCoins = 1; levelTime = 30
+            run(.sequence([.wait(forDuration: 0.5), .run { [weak self] in self?.showLevelComplete() }]))
+            return
         }
         if ProcessInfo.processInfo.environment["KAIDITYA_ARCADE"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -287,10 +303,11 @@ final class GameScene: SKScene {
         controlPanel.zPosition = ZLayer.hud - 1
         cam.addChild(controlPanel)
 
-        interactBtn = GameButton(key: "interact", title: "TALK", color: Palette.heroBlue, radius: 38)
+        // Thumb arc: big context ACTION (talk/grapple/charge/fight) + DASH, smaller SHIELD/HIDE above.
+        interactBtn = GameButton(key: "interact", title: "TALK", color: Palette.heroBlue, radius: 44)
         dashBtn = GameButton(key: "dash", title: "DASH", color: Palette.energy.darker, radius: 38)
-        shieldBtn = GameButton(key: "shield", title: "SHIELD", color: Palette.heroRed, radius: 38)
-        disguiseBtn = GameButton(key: "disguise", title: "HIDE", color: Palette.bush, radius: 38)
+        shieldBtn = GameButton(key: "shield", title: "SHIELD", color: Palette.heroRed, radius: 30)
+        disguiseBtn = GameButton(key: "disguise", title: "HIDE", color: Palette.bush, radius: 30)
         grappleBtn = GameButton(key: "grapple", title: "GRAPPLE", color: Palette.crystal.darker, radius: 38)
         for b in [interactBtn!, dashBtn!, shieldBtn!, disguiseBtn!, grappleBtn!] { cam.addChild(b) }
         interactBtn.setEnabled(false)
@@ -304,7 +321,7 @@ final class GameScene: SKScene {
         let dot = SKShapeNode(circleOfRadius: 22)
         dot.fillColor = SKColor(white: 1, alpha: 0.18); dot.strokeColor = .clear
         hint.addChild(dot)
-        let lbl = SKLabelNode(text: "MOVE"); lbl.fontName = "AvenirNext-Bold"; lbl.fontSize = 11
+        let lbl = RichLabel(text: "MOVE"); lbl.fontName = "AvenirNext-Bold"; lbl.fontSize = 11
         lbl.fontColor = SKColor(white: 1, alpha: 0.5); lbl.position = CGPoint(x: 0, y: -70)
         hint.addChild(lbl)
         hint.zPosition = ZLayer.hud
@@ -318,7 +335,7 @@ final class GameScene: SKScene {
         }())
         tri.name = "tri"; tri.fillColor = Palette.energy; tri.strokeColor = .white; tri.lineWidth = 1.5; tri.glowWidth = 2
         objectiveArrow.addChild(tri)
-        let arrowLbl = SKLabelNode(text: ""); arrowLbl.name = "lbl"
+        let arrowLbl = RichLabel(text: ""); arrowLbl.name = "lbl"
         arrowLbl.fontName = "AvenirNext-Heavy"; arrowLbl.fontSize = 11; arrowLbl.fontColor = .white
         arrowLbl.verticalAlignmentMode = .center; arrowLbl.horizontalAlignmentMode = .center
         let arrowPlate = roundedRect(size: CGSize(width: 72, height: 18), corner: 9, color: SKColor(white: 0, alpha: 0.6))
@@ -337,12 +354,14 @@ final class GameScene: SKScene {
         let cx = halfW - 116
         let cy = -halfH + safeBottom + 138
         let s: CGFloat = 62
-        controlPanel.position = CGPoint(x: cx, y: cy)
-        shieldBtn.position   = CGPoint(x: cx,     y: cy + s)   // top
-        dashBtn.position     = CGPoint(x: cx + s, y: cy)       // right
-        interactBtn.position = CGPoint(x: cx,     y: cy - s)   // bottom
-        disguiseBtn.position = CGPoint(x: cx - s, y: cy)       // left
-        grappleBtn.position  = CGPoint(x: cx,     y: cy + s * 2 + 4)   // contextual, above SHIELD
+        _ = (cx, cy, s)
+        controlPanel.isHidden = true   // the arc layout needs no backing plate
+        let ax = halfW - 72, ay = -halfH + safeBottom + 78
+        interactBtn.position = CGPoint(x: ax,       y: ay)        // primary, corner
+        dashBtn.position     = CGPoint(x: ax - 104, y: ay - 4)    // secondary, left of it
+        shieldBtn.position   = CGPoint(x: ax - 80,  y: ay + 88)
+        disguiseBtn.position = CGPoint(x: ax + 4,   y: ay + 112)
+        grappleBtn.position  = interactBtn.position   // folded into ACTION; kept hidden
         moveHint?.position = CGPoint(x: -halfW + 92, y: -halfH + safeBottom + 110)
     }
 
@@ -364,7 +383,7 @@ final class GameScene: SKScene {
         disguiseBtn.isHidden = hidden
         grappleBtn?.isHidden = true   // contextual; shown by updateGrappleTarget
         objectiveArrow.isHidden = true   // contextual; shown by updateObjectiveArrow
-        controlPanel.isHidden = hidden
+        controlPanel.isHidden = true
         moveHint?.isHidden = hidden || hasMoved
     }
 
@@ -391,13 +410,14 @@ final class GameScene: SKScene {
         truck = nil; trafficCars = []; trafficTimer = 0; driveSpinTimer = 0
         chaseTime = 0; truckTiredAnnounced = false
         coinNodes = []; coins = 0; keycardNode = nil; hasKeycard = false
-        speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []; hazards = []
+        speedPads = []; magnetNodes = []; starNodes = []; lasers = []; waterRects = []; hazards = []; sites = []
         magnetTimer = 0; starTimer = 0; speedTimer = 0; bossPhase = 1
         bossProjectiles = []; bossCharging = false; bossAttackCounter = 0; bossFightActive = false
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         maxUnlocked = max(maxUnlocked, idx)
         UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
         bossHits = 0; crystals = 0; caughtCooldown = 0
+        timesHit = 0; levelCoins = 0; levelTime = 0; checkpoint = level.heroSpawn
         lives = maxLives; hud.setLives(lives, max: maxLives)
         nearestInteract = nil
         objective = level.isDriving ? .reachExit : .collect
@@ -420,7 +440,7 @@ final class GameScene: SKScene {
 
         hud.updateObjective(level: "Level \(level.index) · \(level.name)",
                             title: level.objective, hint: objectiveHint(), progress: progressText())
-        hud.updateCrystals(0); hud.setCrystalsHidden(false)
+        hud.updateCrystals(0); hud.setCrystalsHidden(level.mission != .crystals)
         hud.updateCoins(Economy.coins)
         hud.updateEnergy(1)
         hud.hideBossBar()
@@ -446,7 +466,12 @@ final class GameScene: SKScene {
     private func objectiveHint() -> String {
         if level.isDriving { return "Steer to dodge traffic · BOOST to catch up!" }
         switch objective {
-        case .collect: return "Tap HIDE to blend in · HERO to grab crystals"
+        case .collect:
+            switch level.mission {
+            case .crystals: return "Tap HIDE to blend in · HERO to grab crystals"
+            case .rescue:   return "Stand by a cage as HERO to pick the lock"
+            case .sabotage: return level.waterRects.isEmpty ? "Stand by a generator as HERO to shut it down" : "Stand by a pump as HERO to shut it off"
+            }
         case .charge:  return "Bring them to the glowing Power Core"
         case .reachExit: return "Head to the \(level.exitLabel) portal!"
         case .boss:    return "Use SHIELD, then DASH into Lord Chow-Chow!"
@@ -464,6 +489,7 @@ final class GameScene: SKScene {
         for t in level.treeSpots { addTree(at: t) }
         for c in level.coverSpots { addCover(at: c) }
         for spot in level.crystalSpots { addCrystal(at: spot) }
+        for (i, spot) in level.siteSpots.enumerated() { addSite(at: spot, index: i) }
         for wp in level.minionPatrols {
             let m = Minion(waypoints: wp, speed: level.minionSpeed * stealthSpeedMul,
                            range: level.minionRange * stealthRangeMul, drone: level.dronesStyle)
@@ -496,7 +522,7 @@ final class GameScene: SKScene {
     private func buildMechanics() {
         waterRects = level.waterRects
         for r in waterRects {
-            let w = SKShapeNode(rect: r, cornerRadius: 14)
+            let w = SKShapeNode(rect: r, cornerRadius: 14); w.name = "water"
             w.fillColor = Palette.water.withAlphaComponent(0.62); w.strokeColor = Palette.water.darker; w.lineWidth = 3
             w.zPosition = ZLayer.pathDeco; worldNode.addChild(w)
         }
@@ -508,7 +534,7 @@ final class GameScene: SKScene {
         for p in level.speedPads {
             let pad = roundedRect(size: CGSize(width: 64, height: 64), corner: 12, color: biome.accent.withAlphaComponent(0.45))
             pad.strokeColor = biome.accent; pad.lineWidth = 2; pad.position = p; pad.zPosition = ZLayer.pathDeco + 0.6
-            let arrow = SKLabelNode(text: "»»"); arrow.fontName = "AvenirNext-Heavy"; arrow.fontSize = 26
+            let arrow = RichLabel(text: "»»"); arrow.fontName = "AvenirNext-Heavy"; arrow.fontSize = 26
             arrow.fontColor = .white; arrow.verticalAlignmentMode = .center; arrow.zRotation = .pi/2; pad.addChild(arrow)
             worldNode.addChild(pad); speedPads.append(pad)
         }
@@ -559,7 +585,7 @@ final class GameScene: SKScene {
     }
 
     private func blip(_ pos: CGPoint, _ text: String, _ color: SKColor) {
-        let s = SKLabelNode(text: text); s.fontSize = 26; s.fontColor = color
+        let s = RichLabel(text: text); s.fontSize = 26; s.fontColor = color
         s.position = pos; s.zPosition = ZLayer.fx; worldNode.addChild(s)
         s.run(.sequence([.group([.moveBy(x: 0, y: 42, duration: 0.5), .fadeOut(withDuration: 0.5)]), .removeFromParent()]))
     }
@@ -573,11 +599,12 @@ final class GameScene: SKScene {
 
         let pp = player.position
         for c in coinNodes where c.parent != nil && c.position.distance(to: pp) < 38 {
-            c.removeFromParent(); coins += 1; Economy.addCoins(1); hud.updateCoins(Economy.coins)
+            c.removeFromParent(); coins += 1; levelCoins += 1; Economy.addCoins(1); hud.updateCoins(Economy.coins)
             blip(c.position, "★", Palette.energy); SoundFX.shared.play("coin")
         }
         if let k = keycardNode, k.parent != nil, k.position.distance(to: pp) < 42 {
             k.removeFromParent(); hasKeycard = true
+            setCheckpoint(k.position)
             hud.showToast("Keycard! The exit is unlocked.", color: Palette.energy)
             exitPortal?.run(.fadeIn(withDuration: 0.3)); SoundFX.shared.play("powerup")
         }
@@ -674,7 +701,7 @@ final class GameScene: SKScene {
             worldNode.addChild(win)
         }
         if let label = spec.label {
-            let l = SKLabelNode(text: label)
+            let l = RichLabel(text: label)
             l.fontName = "AvenirNext-Heavy"; l.fontSize = 26; l.fontColor = .white
             l.verticalAlignmentMode = .center
             l.position = CGPoint(x: p.x, y: p.y); l.zPosition = ZLayer.buildings + 2
@@ -725,7 +752,7 @@ final class GameScene: SKScene {
         ring.strokeColor = biome.accent; ring.lineWidth = 3; ring.fillColor = .clear
         ring.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: 4)))
         core.addChild(ring)
-        let label = SKLabelNode(text: "POWER CORE")
+        let label = RichLabel(text: "POWER CORE")
         label.fontName = "AvenirNext-Bold"; label.fontSize = 12; label.fontColor = biome.accent
         label.position = CGPoint(x: 0, y: -54); core.addChild(label)
         worldNode.addChild(core)
@@ -738,7 +765,7 @@ final class GameScene: SKScene {
         v.run(.repeatForever(.sequence([.moveBy(x:0,y:6,duration:0.6), .moveBy(x:0,y:-6,duration:0.6)])))
         worldNode.addChild(v)
         villain = v
-        let l = SKLabelNode(text: "LORD CHOW-CHOW")
+        let l = RichLabel(text: "LORD CHOW-CHOW")
         l.fontName = "AvenirNext-Heavy"; l.fontSize = 14; l.fontColor = biome.signColor
         l.position = CGPoint(x: 0, y: 60); l.zPosition = ZLayer.fx
         v.addChild(l)
@@ -754,7 +781,7 @@ final class GameScene: SKScene {
         let plate = roundedRect(size: CGSize(width: CGFloat(text.count) * 12 + 28, height: 32), corner: 8, color: biome.signColor)
         plate.strokeColor = .white; plate.lineWidth = 2
         plate.position = p; plate.zPosition = ZLayer.decals
-        let l = SKLabelNode(text: text)
+        let l = RichLabel(text: text)
         l.fontName = "AvenirNext-Heavy"; l.fontSize = 17; l.fontColor = .white
         l.verticalAlignmentMode = .center
         plate.addChild(l)
@@ -842,7 +869,7 @@ final class GameScene: SKScene {
         let t = level.isBoat ? CharacterFactory.makeBoat(body: Palette.villain, big: true) : CharacterFactory.makeTruck()
         t.position = level.exitPos; t.zPosition = ZLayer.characters
         worldNode.addChild(t); truck = t
-        let l = SKLabelNode(text: "LORD CHOW-CHOW"); l.fontName = "AvenirNext-Heavy"; l.fontSize = 13
+        let l = RichLabel(text: "LORD CHOW-CHOW"); l.fontName = "AvenirNext-Heavy"; l.fontSize = 13
         l.fontColor = biome.signColor; l.position = CGPoint(x: 0, y: 80); t.addChild(l)
     }
 
@@ -874,7 +901,7 @@ final class GameScene: SKScene {
         board.strokeColor = .white; board.lineWidth = 2
         board.position = p; board.zPosition = ZLayer.coverTops
         let msg = ["GO KAIDITYA!", "⚡ DANGER", "CITY 12 mi", "K-MART", "TURBO!"].randomishPick(p.y)
-        let txt = SKLabelNode(text: msg); txt.fontName = "AvenirNext-Heavy"; txt.fontSize = 13
+        let txt = RichLabel(text: msg); txt.fontName = "AvenirNext-Heavy"; txt.fontSize = 13
         txt.fontColor = .white; txt.verticalAlignmentMode = .center
         txt.numberOfLines = 2; txt.preferredMaxLayoutWidth = 100; board.addChild(txt)
         worldNode.addChild(board)
@@ -938,7 +965,8 @@ final class GameScene: SKScene {
         // Real chase: the truck flees fast at first (you must BOOST to keep up),
         // then gradually tires so you can close the gap with time + skill.
         chaseTime += dt
-        let truckSpeed = max(195, 370 - CGFloat(chaseTime) * 7.5)
+        let tier: CGFloat = level.isBoat ? 1 : 0
+        let truckSpeed = max(195 + 25 * tier, 370 + 25 * tier - CGFloat(chaseTime) * (7.5 - 1.5 * tier))
         if let t = truck {
             t.position.y = min(t.position.y + truckSpeed * dtf, worldSize.height - 200)
             t.position.x = roadCenterX(t.position.y) + sin(t.position.y / 200) * 70
@@ -950,7 +978,7 @@ final class GameScene: SKScene {
 
         // Same-direction traffic to overtake (spawns ahead, moves up slower).
         trafficTimer += dt
-        if trafficTimer > 0.8 { trafficTimer = 0; spawnTraffic() }
+        if trafficTimer > (level.isBoat ? 0.62 : 0.8) { trafficTimer = 0; spawnTraffic() }
         for car in trafficCars {
             car.position.y += 150 * dtf
             car.position.x = roadCenterX(car.position.y) + (car.userData?["lane"] as? CGFloat ?? 0)
@@ -992,6 +1020,7 @@ final class GameScene: SKScene {
 
     private func drivingCrash(into car: SKSpriteNode) {
         driveSpinTimer = 0.7
+        timesHit += 1
         player.position.y -= 60
         player.carNode?.run(.sequence([.rotate(byAngle: .pi * 2, duration: 0.5), .run { [weak self] in self?.player.carNode?.zRotation = 0 }]))
         car.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
@@ -1012,13 +1041,12 @@ final class GameScene: SKScene {
     }
 
     private func applyControlMode() {
-        if level.isDriving {
+        if level.isDriving && !inHub {
             shieldBtn.isHidden = true; disguiseBtn.isHidden = true; interactBtn.isHidden = true
             grappleBtn.isHidden = true
             controlPanel.isHidden = true
             dashBtn.isHidden = false; dashBtn.setTitle("BOOST")
         } else {
-            controlPanel.isHidden = false
             dashBtn.setTitle("DASH")
             setButtonsHidden(false)
         }
@@ -1033,14 +1061,14 @@ final class GameScene: SKScene {
         b.position = CGPoint(x: size.width/2 - 40, y: size.height/2 - safeTop - 30)
         let circ = SKShapeNode(circleOfRadius: 22)
         circ.fillColor = Palette.hudPanel; circ.strokeColor = Palette.hudAccent; circ.lineWidth = 1.5; b.addChild(circ)
-        let icon = SKLabelNode(text: SoundFX.shared.muted ? "🔇" : "🔊")
+        let icon = RichLabel(text: SoundFX.shared.muted ? "🔇" : "🔊")
         icon.name = "muteIcon"; icon.fontSize = 22; icon.verticalAlignmentMode = .center; b.addChild(icon)
         overlay.addChild(b)
     }
 
     private func toggleMute(in overlay: SKNode?) {
         let muted = SoundFX.shared.toggleMute()
-        (overlay?.childNode(withName: "//muteIcon") as? SKLabelNode)?.text = muted ? "🔇" : "🔊"
+        (overlay?.childNode(withName: "//muteIcon") as? RichLabel)?.text = muted ? "🔇" : "🔊"
         if !muted { SoundFX.shared.play("tap") }
     }
 
@@ -1105,10 +1133,10 @@ final class GameScene: SKScene {
         card.strokeColor = Palette.hudAccent; card.lineWidth = 2
         card.position = CGPoint(x: 0, y: 10); overlay.addChild(card)
 
-        let title = SKLabelNode(text: "KAIDITYA")
+        let title = RichLabel(text: "KAIDITYA")
         title.fontName = "AvenirNext-Heavy"; title.fontSize = 56; title.fontColor = Palette.energy
         title.position = CGPoint(x: 0, y: 130); card.addChild(title)
-        let sub = SKLabelNode(text: "Pint-Sized Hero, Big-Time Save")
+        let sub = RichLabel(text: "Pint-Sized Hero, Big-Time Save")
         sub.fontName = "AvenirNext-Medium"; sub.fontSize = 17; sub.fontColor = .white
         sub.position = CGPoint(x: 0, y: 90); card.addChild(sub)
 
@@ -1121,7 +1149,7 @@ final class GameScene: SKScene {
         play.strokeColor = .white; play.lineWidth = 2
         play.position = CGPoint(x: 0, y: -150); play.name = "playButton"
         play.run(.repeatForever(.sequence([.scale(to: 1.04, duration: 0.7), .scale(to: 1.0, duration: 0.7)])))
-        let playLabel = SKLabelNode(text: "▶  PLAY")
+        let playLabel = RichLabel(text: "▶  PLAY")
         playLabel.fontName = "AvenirNext-Heavy"; playLabel.fontSize = 23; playLabel.fontColor = .white
         playLabel.verticalAlignmentMode = .center; play.addChild(playLabel)
         card.addChild(play)
@@ -1144,7 +1172,7 @@ final class GameScene: SKScene {
             stars.particleColor = SKColor(red: 0.5, green: 0.8, blue: 1, alpha: 1); stars.particleBirthRate = 5
             overlay.addChild(stars)
         }
-        let title = SKLabelNode(text: "SELECT A ZONE")
+        let title = RichLabel(text: "SELECT A ZONE")
         title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
         title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
 
@@ -1153,7 +1181,7 @@ final class GameScene: SKScene {
         stats.position = CGPoint(x: -size.width/2 + 40, y: size.height/2 - safeTop - 30)
         let sc = SKShapeNode(circleOfRadius: 22); sc.fillColor = Palette.hudPanel; sc.strokeColor = Palette.hudAccent; sc.lineWidth = 1.5
         stats.addChild(sc)
-        let si = SKLabelNode(text: "📊"); si.fontSize = 20; si.verticalAlignmentMode = .center; stats.addChild(si)
+        let si = RichLabel(text: "📊"); si.fontSize = 20; si.verticalAlignmentMode = .center; stats.addChild(si)
         overlay.addChild(stats)
 
         // Serpentine layout of the 9 zones.
@@ -1184,21 +1212,25 @@ final class GameScene: SKScene {
             circle.strokeColor = unlocked ? .white : SKColor(white: 0.45, alpha: 1); circle.lineWidth = 3
             if unlocked { circle.glowWidth = 3 }
             node.addChild(circle)
-            let num = SKLabelNode(text: unlocked ? "\(lvl.index)" : "🔒")
+            let num = RichLabel(text: unlocked ? "\(lvl.index)" : "🔒")
             num.fontName = "AvenirNext-Heavy"; num.fontSize = unlocked ? 22 : 18
             num.fontColor = unlocked ? .white : SKColor(white: 0.6, alpha: 1)
             num.verticalAlignmentMode = .center; node.addChild(num)
-            let name = SKLabelNode(text: lvl.name)
+            let name = RichLabel(text: lvl.name)
             name.fontName = "AvenirNext-Bold"; name.fontSize = 10
             name.fontColor = unlocked ? .white : SKColor(white: 0.5, alpha: 1)
             name.verticalAlignmentMode = .center; name.position = CGPoint(x: 0, y: -44)
             name.numberOfLines = 2; name.preferredMaxLayoutWidth = 100; node.addChild(name)
+            let best = GameScene.bestStars(lvl)
+            if unlocked && best > 0 {
+                let row = GameScene.starRow(best, size: 12); row.position = CGPoint(x: 0, y: 40); node.addChild(row)
+            }
             if i == maxUnlocked && maxUnlocked < Levels.all.count {
                 circle.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.5), .scale(to: 1.0, duration: 0.5)])))
             }
             overlay.addChild(node)
         }
-        let hint = SKLabelNode(text: "tap a zone to play")
+        let hint = RichLabel(text: "tap a zone to play")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
         hint.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 70); overlay.addChild(hint)
         addMuteButton(to: overlay)
@@ -1207,7 +1239,7 @@ final class GameScene: SKScene {
         let shop = roundedRect(size: CGSize(width: 180, height: 44), corner: 14, color: Palette.energy.darker)
         shop.strokeColor = .white; shop.lineWidth = 2; shop.name = "shopButton"
         shop.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 30)
-        let shopLbl = SKLabelNode(text: "🛒  SHOP  ·  \(Economy.coins)★")
+        let shopLbl = RichLabel(text: "🛒  SHOP  ·  \(Economy.coins)★")
         shopLbl.fontName = "AvenirNext-Heavy"; shopLbl.fontSize = 16; shopLbl.fontColor = .white
         shopLbl.verticalAlignmentMode = .center; shop.addChild(shopLbl)
         shop.position = CGPoint(x: -98, y: -size.height/2 + safeBottom + 30)
@@ -1216,7 +1248,7 @@ final class GameScene: SKScene {
         let home = roundedRect(size: CGSize(width: 150, height: 44), corner: 14, color: Palette.heroBlue)
         home.strokeColor = .white; home.lineWidth = 2; home.name = "homeButton"
         home.position = CGPoint(x: 96, y: -size.height/2 + safeBottom + 30)
-        let homeLbl = SKLabelNode(text: "🏠  CITY"); homeLbl.fontName = "AvenirNext-Heavy"; homeLbl.fontSize = 16
+        let homeLbl = RichLabel(text: "🏠  CITY"); homeLbl.fontName = "AvenirNext-Heavy"; homeLbl.fontSize = 16
         homeLbl.fontColor = .white; homeLbl.verticalAlignmentMode = .center; home.addChild(homeLbl)
         overlay.addChild(home)
 
@@ -1230,10 +1262,10 @@ final class GameScene: SKScene {
         let overlay = SKNode(); overlay.name = "shopOverlay"; overlay.zPosition = ZLayer.overlay
         let bg = SKSpriteNode(color: SKColor(red: 0.09, green: 0.11, blue: 0.20, alpha: 1), size: CGSize(width: 4000, height: 4000))
         overlay.addChild(bg)
-        let title = SKLabelNode(text: "GADGET SHOP")
+        let title = RichLabel(text: "GADGET SHOP")
         title.fontName = "AvenirNext-Heavy"; title.fontSize = 30; title.fontColor = Palette.energy
         title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 60); overlay.addChild(title)
-        let purse = SKLabelNode(text: "Coins: \(Economy.coins) ★")
+        let purse = RichLabel(text: "Coins: \(Economy.coins) ★")
         purse.fontName = "AvenirNext-Bold"; purse.fontSize = 17; purse.fontColor = .white
         purse.position = CGPoint(x: 0, y: size.height/2 - safeTop - 96); overlay.addChild(purse)
 
@@ -1245,13 +1277,13 @@ final class GameScene: SKScene {
             let row = roundedRect(size: CGSize(width: rowW, height: rowH), corner: 14, color: Palette.hudPanel)
             row.strokeColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.4, alpha: 1))
             row.lineWidth = 2; row.position = CGPoint(x: 0, y: y); row.name = "shoprow_\(u.rawValue)"
-            let g = SKLabelNode(text: u.glyph); g.fontSize = 30; g.verticalAlignmentMode = .center
+            let g = RichLabel(text: u.glyph); g.fontSize = 30; g.verticalAlignmentMode = .center
             g.position = CGPoint(x: -rowW/2 + 34, y: 0); row.addChild(g)
-            let t = SKLabelNode(text: u.title); t.fontName = "AvenirNext-Heavy"; t.fontSize = 17; t.fontColor = .white
+            let t = RichLabel(text: u.title); t.fontName = "AvenirNext-Heavy"; t.fontSize = 17; t.fontColor = .white
             t.horizontalAlignmentMode = .left; t.position = CGPoint(x: -rowW/2 + 62, y: 12); row.addChild(t)
-            let d = SKLabelNode(text: u.desc); d.fontName = "AvenirNext-Regular"; d.fontSize = 12; d.fontColor = SKColor(white: 0.8, alpha: 1)
+            let d = RichLabel(text: u.desc); d.fontName = "AvenirNext-Regular"; d.fontSize = 12; d.fontColor = SKColor(white: 0.8, alpha: 1)
             d.horizontalAlignmentMode = .left; d.position = CGPoint(x: -rowW/2 + 62, y: -12); row.addChild(d)
-            let price = SKLabelNode(text: owned ? "OWNED ✓" : "\(u.price) ★")
+            let price = RichLabel(text: owned ? "OWNED ✓" : "\(u.price) ★")
             price.fontName = "AvenirNext-Heavy"; price.fontSize = 16
             price.fontColor = owned ? Palette.crystal : (afford ? Palette.energy : SKColor(white: 0.55, alpha: 1))
             price.horizontalAlignmentMode = .right; price.position = CGPoint(x: rowW/2 - 20, y: 0); row.addChild(price)
@@ -1260,7 +1292,7 @@ final class GameScene: SKScene {
         }
 
         // Costume picker.
-        let costLbl = SKLabelNode(text: "COSTUMES"); costLbl.fontName = "AvenirNext-Heavy"; costLbl.fontSize = 14
+        let costLbl = RichLabel(text: "COSTUMES"); costLbl.fontName = "AvenirNext-Heavy"; costLbl.fontSize = 14
         costLbl.fontColor = Palette.hudAccent; costLbl.position = CGPoint(x: 0, y: y - 6); overlay.addChild(costLbl)
         let all = Costume.allCases
         let sw: CGFloat = 50, gap: CGFloat = 12
@@ -1276,7 +1308,7 @@ final class GameScene: SKScene {
             node.addChild(body)
             let capeChip = roundedRect(size: CGSize(width: 14, height: 22), corner: 3, color: c.cape)
             capeChip.position = CGPoint(x: 14, y: -4); node.addChild(capeChip)
-            let tag = SKLabelNode(text: equipped ? "✓" : (owned ? c.name : "\(c.price)★"))
+            let tag = RichLabel(text: equipped ? "✓" : (owned ? c.name : "\(c.price)★"))
             tag.fontName = "AvenirNext-Bold"; tag.fontSize = equipped ? 16 : 9
             tag.fontColor = equipped ? Palette.energy : .white; tag.verticalAlignmentMode = .center
             tag.position = CGPoint(x: 0, y: -sw/2 - 9); node.addChild(tag)
@@ -1287,7 +1319,7 @@ final class GameScene: SKScene {
         let back = roundedRect(size: CGSize(width: 160, height: 44), corner: 14, color: Palette.heroBlue)
         back.strokeColor = .white; back.lineWidth = 2; back.name = "shopBack"
         back.position = CGPoint(x: 0, y: -size.height/2 + safeBottom + 34)
-        let bl = SKLabelNode(text: "◂ BACK"); bl.fontName = "AvenirNext-Heavy"; bl.fontSize = 16; bl.fontColor = .white
+        let bl = RichLabel(text: "◂ BACK"); bl.fontName = "AvenirNext-Heavy"; bl.fontSize = 16; bl.fontColor = .white
         bl.verticalAlignmentMode = .center; back.addChild(bl); overlay.addChild(back)
         cam.addChild(overlay); positionOverlay(overlay)
     }
@@ -1327,7 +1359,7 @@ final class GameScene: SKScene {
         panel.addChild(dim)
         let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 320), corner: 20, color: Palette.hudPanel)
         card.strokeColor = Palette.hudAccent; card.lineWidth = 2.5; panel.addChild(card)
-        let title = SKLabelNode(text: "HERO STATS"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 26
+        let title = RichLabel(text: "HERO STATS"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 26
         title.fontColor = Palette.energy; title.position = CGPoint(x: 0, y: 122); card.addChild(title)
         let zonesReached = min(UserDefaults.standard.integer(forKey: "kaiditya.maxUnlocked") + 1, Levels.all.count)
         let rows: [(String, String)] = [
@@ -1340,13 +1372,13 @@ final class GameScene: SKScene {
         ]
         var y: CGFloat = 78
         for (label, value) in rows {
-            let l = SKLabelNode(text: label); l.fontName = "AvenirNext-Medium"; l.fontSize = 16; l.fontColor = .white
+            let l = RichLabel(text: label); l.fontName = "AvenirNext-Medium"; l.fontSize = 16; l.fontColor = .white
             l.horizontalAlignmentMode = .left; l.position = CGPoint(x: -150, y: y); card.addChild(l)
-            let v = SKLabelNode(text: value); v.fontName = "AvenirNext-Heavy"; v.fontSize = 16; v.fontColor = Palette.crystal
+            let v = RichLabel(text: value); v.fontName = "AvenirNext-Heavy"; v.fontSize = 16; v.fontColor = Palette.crystal
             v.horizontalAlignmentMode = .right; v.position = CGPoint(x: 150, y: y); card.addChild(v)
             y -= 34
         }
-        let go = SKLabelNode(text: "tap to close ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
+        let go = RichLabel(text: "tap to close ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
         go.position = CGPoint(x: 0, y: -132); card.addChild(go)
         dramatize(card, in: panel, accent: Palette.hudAccent, rays: false)
         mapOverlay.addChild(panel)
@@ -1393,23 +1425,25 @@ final class GameScene: SKScene {
         card.strokeColor = biome.accent; card.lineWidth = 2.5
         overlay.addChild(card)
 
-        let eyebrow = SKLabelNode(text: "LEVEL \(level.index)")
+        let eyebrow = RichLabel(text: "LEVEL \(level.index)")
         eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 16; eyebrow.fontColor = biome.accent
         eyebrow.position = CGPoint(x: 0, y: 86); card.addChild(eyebrow)
-        let name = SKLabelNode(text: level.name)
+        let name = RichLabel(text: level.name)
         name.fontName = "AvenirNext-Heavy"; name.fontSize = 34; name.fontColor = .white
         name.position = CGPoint(x: 0, y: 46); card.addChild(name)
-        let sub = SKLabelNode(text: level.subtitle)
+        let nameMaxW = min(size.width - 36, 520) - 40
+        if name.frame.width > nameMaxW { name.setScale(nameMaxW / name.frame.width) }
+        let sub = RichLabel(text: level.subtitle)
         sub.fontName = "AvenirNext-Medium"; sub.fontSize = 15; sub.fontColor = SKColor(white: 0.85, alpha: 1)
         sub.numberOfLines = 2; sub.preferredMaxLayoutWidth = min(size.width - 90, 460)
         sub.verticalAlignmentMode = .center
         sub.position = CGPoint(x: 0, y: 6); card.addChild(sub)
-        let obj = SKLabelNode(text: "🎯  " + level.objective)
+        let obj = RichLabel(text: "🎯  " + level.objective)
         obj.fontName = "AvenirNext-Medium"; obj.fontSize = 14; obj.fontColor = biome.accent
         obj.numberOfLines = 2; obj.preferredMaxLayoutWidth = min(size.width - 90, 460)
         obj.verticalAlignmentMode = .center
         obj.position = CGPoint(x: 0, y: -46); card.addChild(obj)
-        let go = SKLabelNode(text: "tap to begin ▸")
+        let go = RichLabel(text: "tap to begin ▸")
         go.fontName = "AvenirNext-Bold"; go.fontSize = 14; go.fontColor = .white
         go.position = CGPoint(x: 0, y: -98); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
@@ -1450,7 +1484,7 @@ final class GameScene: SKScene {
             ("Tap HIDE to disguise as an ordinary kid — the minions won't recognize you.", disguiseBtn.position),
             ("Tap HERO to suit up again so you can grab crystals and take on bad guys.", disguiseBtn.position),
             ("DASH zooms you forward. SHIELD makes you invincible for a moment.", dashBtn.position),
-            ("When you see a GRAPPLE point, tap it to zip across gaps and water!", grappleBtn.position),
+            ("The big ACTION button changes as you go: TALK to people, GRAPPLE to zip across gaps, and more.", interactBtn.position),
             ("Sneak past the glowing vision cones, hide in bushes, and collect the Energy Crystals. Now go save the world!", nil)
         ]
     }
@@ -1480,15 +1514,15 @@ final class GameScene: SKScene {
         card.strokeColor = Palette.hudAccent; card.lineWidth = 2
         card.position = CGPoint(x: 0, y: size.height * 0.16)
         overlay.addChild(card)
-        let eyebrow = SKLabelNode(text: "TIP \(tourStep + 1)/\(steps.count)")
+        let eyebrow = RichLabel(text: "TIP \(tourStep + 1)/\(steps.count)")
         eyebrow.fontName = "AvenirNext-Heavy"; eyebrow.fontSize = 12; eyebrow.fontColor = Palette.hudAccent
         eyebrow.position = CGPoint(x: 0, y: 50); card.addChild(eyebrow)
-        let body = SKLabelNode(text: step.text)
+        let body = RichLabel(text: step.text)
         body.fontName = "AvenirNext-Medium"; body.fontSize = 16; body.fontColor = .white
         body.numberOfLines = 4; body.preferredMaxLayoutWidth = cardW - 40
         body.verticalAlignmentMode = .center; body.horizontalAlignmentMode = .center
         body.position = CGPoint(x: 0, y: 2); card.addChild(body)
-        let go = SKLabelNode(text: tourStep < steps.count - 1 ? "tap to continue ▸" : "tap to play ▸")
+        let go = RichLabel(text: tourStep < steps.count - 1 ? "tap to continue ▸" : "tap to play ▸")
         go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.energy
         go.position = CGPoint(x: 0, y: -56); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
@@ -1518,24 +1552,39 @@ final class GameScene: SKScene {
         overlay.name = "completeOverlay"; overlay.zPosition = ZLayer.overlay
         let dim = SKSpriteNode(color: SKColor(white: 0, alpha: 0.55), size: CGSize(width: 4000, height: 4000))
         overlay.addChild(dim)
-        let card = roundedRect(size: CGSize(width: min(size.width - 36, 460), height: 250), corner: 22, color: Palette.hudPanel)
+        let result = starResult()
+        let earned = result.earned.filter { $0 }.count
+        recordStars(earned)
+        let card = roundedRect(size: CGSize(width: min(size.width - 36, 460), height: 320), corner: 22, color: Palette.hudPanel)
         card.strokeColor = Palette.energy; card.lineWidth = 3
         overlay.addChild(card)
-        let badge = SKLabelNode(text: "LEVEL \(level.index) CLEAR!")
+        let badge = RichLabel(text: "LEVEL \(level.index) CLEAR!")
         badge.fontName = "AvenirNext-Heavy"; badge.fontSize = 30; badge.fontColor = Palette.energy
-        badge.position = CGPoint(x: 0, y: 70); card.addChild(badge)
-        let star = SKLabelNode(text: "⭐️ ⭐️ ⭐️")
-        star.fontSize = 30; star.position = CGPoint(x: 0, y: 18); card.addChild(star)
+        badge.position = CGPoint(x: 0, y: 112); card.addChild(badge)
+        let star = GameScene.starRow(earned, size: 40)
+        star.position = CGPoint(x: 0, y: 70); card.addChild(star)
+        // Criteria checklist so the player knows exactly how to earn the missing stars.
+        for (i, label) in result.labels.enumerated() {
+            let ok = result.earned[i]
+            let row = RichLabel(text: (ok ? "✓  " : "✕  ") + label)
+            row.fontName = "AvenirNext-DemiBold"; row.fontSize = 15
+            row.fontColor = ok ? Palette.crystal : SKColor(white: 0.6, alpha: 1)
+            row.horizontalAlignmentMode = .left; row.verticalAlignmentMode = .center
+            row.position = CGPoint(x: -110, y: 24 - CGFloat(i) * 26); card.addChild(row)
+        }
         let nextName = Levels.all[levelIndex + 1].name
-        let nxt = SKLabelNode(text: "Next: \(nextName)")
+        let nxt = RichLabel(text: "Next: \(nextName)")
         nxt.fontName = "AvenirNext-Medium"; nxt.fontSize = 16; nxt.fontColor = .white
-        nxt.position = CGPoint(x: 0, y: -34); card.addChild(nxt)
-        let go = SKLabelNode(text: "tap to continue ▸")
+        nxt.position = CGPoint(x: 0, y: -80); card.addChild(nxt)
+        let go = RichLabel(text: "tap to continue ▸")
         go.fontName = "AvenirNext-Bold"; go.fontSize = 14; go.fontColor = Palette.hudAccent
-        go.position = CGPoint(x: 0, y: -82); card.addChild(go)
+        go.position = CGPoint(x: 0, y: -124); card.addChild(go)
         go.run(.repeatForever(.sequence([.fadeAlpha(to: 0.4, duration: 0.6), .fadeAlpha(to: 1, duration: 0.6)])))
-        // stars pop in sequence
-        star.setScale(0); star.run(.sequence([.wait(forDuration: 0.3), .scale(to: 1.0, duration: 0.3)]))
+        // stars pop in one at a time
+        for (i, st) in star.children.enumerated() {
+            st.setScale(0)
+            st.run(.sequence([.wait(forDuration: 0.3 + Double(i) * 0.18), .scale(to: 1.15, duration: 0.14), .scale(to: 1.0, duration: 0.08)]))
+        }
         dramatize(card, in: overlay, accent: Palette.energy)
         if let conf = Effects.ambient(.sparks, screen: size) {
             conf.particleColor = Palette.energy; conf.particleBirthRate = 40
@@ -1560,13 +1609,13 @@ final class GameScene: SKScene {
         let card = roundedRect(size: CGSize(width: min(size.width - 28, 520), height: 330), corner: 22, color: Palette.hudPanel)
         card.strokeColor = Palette.energy; card.lineWidth = 3
         overlay.addChild(card)
-        let t1 = SKLabelNode(text: "YOU SAVED"); t1.fontName = "AvenirNext-Heavy"; t1.fontSize = 40; t1.fontColor = Palette.energy
+        let t1 = RichLabel(text: "YOU SAVED"); t1.fontName = "AvenirNext-Heavy"; t1.fontSize = 40; t1.fontColor = Palette.energy
         t1.position = CGPoint(x: 0, y: 108); card.addChild(t1)
-        let t2 = SKLabelNode(text: "THE WORLD!"); t2.fontName = "AvenirNext-Heavy"; t2.fontSize = 40; t2.fontColor = Palette.energy
+        let t2 = RichLabel(text: "THE WORLD!"); t2.fontName = "AvenirNext-Heavy"; t2.fontSize = 40; t2.fontColor = Palette.energy
         t2.position = CGPoint(x: 0, y: 62); card.addChild(t2)
-        let s = SKLabelNode(text: "Lord Chow-Chow is defeated across the whole city."); s.fontName = "AvenirNext-Medium"; s.fontSize = 15; s.fontColor = .white
+        let s = RichLabel(text: "Lord Chow-Chow is defeated across the whole city."); s.fontName = "AvenirNext-Medium"; s.fontSize = 15; s.fontColor = .white
         s.position = CGPoint(x: 0, y: 18); card.addChild(s)
-        let s2 = SKLabelNode(text: "Kaiditya is the city's greatest hero!"); s2.fontName = "AvenirNext-Medium"; s2.fontSize = 15; s2.fontColor = .white
+        let s2 = RichLabel(text: "Kaiditya is the city's greatest hero!"); s2.fontName = "AvenirNext-Medium"; s2.fontSize = 15; s2.fontColor = .white
         s2.position = CGPoint(x: 0, y: -6); card.addChild(s2)
         let hero = CharacterFactory.makeHero(); hero.setScale(1.8); hero.position = CGPoint(x: 0, y: -92)
         hero.run(.repeatForever(.sequence([.moveBy(x:0,y:10,duration:0.5), .moveBy(x:0,y:-10,duration:0.5)])))
@@ -1601,15 +1650,15 @@ final class GameScene: SKScene {
         nameBg.position = CGPoint(x: -boxW/2 + inset + (CGFloat(speaker.count) * 12 + 26)/2 - 6, y: 76)
         nameBg.zPosition = 2; box.addChild(nameBg)
         nameBg.setScale(0); nameBg.run(.sequence([.wait(forDuration: 0.12), .scale(to: 1, duration: 0.2)]))
-        let name = SKLabelNode(text: speaker)
+        let name = RichLabel(text: speaker)
         name.fontName = "AvenirNext-Heavy"; name.fontSize = 18; name.fontColor = .white
         name.verticalAlignmentMode = .center; nameBg.addChild(name)
-        let body = SKLabelNode(text: lines.first ?? "")
+        let body = RichLabel(text: lines.first ?? "")
         body.fontName = "AvenirNext-Medium"; body.fontSize = 17; body.fontColor = .white
         body.horizontalAlignmentMode = .left; body.verticalAlignmentMode = .top
         body.numberOfLines = 4; body.preferredMaxLayoutWidth = boxW - inset * 2
         body.position = CGPoint(x: -boxW/2 + inset, y: 30); body.name = "dlgBody"; box.addChild(body)
-        let hint = SKLabelNode(text: "tap to continue ▸")
+        let hint = RichLabel(text: "tap to continue ▸")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
         hint.horizontalAlignmentMode = .right; hint.position = CGPoint(x: boxW/2 - inset, y: -70); box.addChild(hint)
 
@@ -1626,12 +1675,12 @@ final class GameScene: SKScene {
         if idx >= lines.count {
             overlay.removeFromParent()
             state = .playing
-            setButtonsHidden(false)
+            applyControlMode()
             let cbs = dialogueCloseCallbacks; dialogueCloseCallbacks.removeAll()
             cbs.forEach { $0() }
         } else {
             overlay.userData?["idx"] = idx
-            (overlay.childNode(withName: "//dlgBody") as? SKLabelNode)?.text = lines[idx]
+            (overlay.childNode(withName: "//dlgBody") as? RichLabel)?.text = lines[idx]
         }
     }
 
@@ -1850,7 +1899,7 @@ final class GameScene: SKScene {
         let chest = CharacterFactory.makeChest(glowing: Economy.canClaimDaily)
         chest.position = chestPos; chest.zPosition = ZLayer.items
         worldNode.addChild(chest); chestNode = chest
-        let chestTag = SKLabelNode(text: "DAILY"); chestTag.fontName = "AvenirNext-Heavy"; chestTag.fontSize = 11
+        let chestTag = RichLabel(text: "DAILY"); chestTag.fontName = "AvenirNext-Heavy"; chestTag.fontSize = 11
         chestTag.fontColor = Palette.energy; chestTag.position = CGPoint(x: 0, y: -34); chest.addChild(chestTag)
         // Biscuit the puppy — wanders the plaza, pettable.
         addPuppy(at: CGPoint(x: 1080, y: 980))
@@ -2028,7 +2077,7 @@ final class GameScene: SKScene {
         dog.removeAction(forKey: "hop")
         dog.run(.sequence([.moveBy(x: 0, y: 14, duration: 0.14), .moveBy(x: 0, y: -14, duration: 0.14)]), withKey: "hop")
         for i in 0..<5 {
-            let heart = SKLabelNode(text: "❤️"); heart.fontSize = 16
+            let heart = RichLabel(text: "❤️"); heart.fontSize = 16
             heart.position = CGPoint(x: dog.position.x + CGFloat(i * 6 - 12), y: dog.position.y + 18)
             heart.zPosition = ZLayer.fx + 3; worldNode.addChild(heart)
             heart.run(.sequence([.group([.moveBy(x: CGFloat(i * 4 - 8), y: 46, duration: 0.9),
@@ -2054,7 +2103,7 @@ final class GameScene: SKScene {
             glow.fillColor = roof.withAlphaComponent(0.35); glow.strokeColor = .white; glow.lineWidth = 2; glow.glowWidth = 4
             glow.position = d; glow.zPosition = ZLayer.items
             glow.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.6), .scale(to: 1.0, duration: 0.6)])))
-            let tag = SKLabelNode(text: label); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 12
+            let tag = RichLabel(text: label); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 12
             tag.fontColor = .white; tag.verticalAlignmentMode = .center; tag.position = CGPoint(x: 0, y: -40)
             glow.addChild(tag)
             worldNode.addChild(glow)
@@ -2117,8 +2166,10 @@ final class GameScene: SKScene {
 
         for m in minions { m.update(dt: dt) }
         if state == .playing {
+            levelTime += dt
             updateStealth(dt: dt)
             updatePickups(dt: dt)
+            updateSites(dt: dt)
             updateMechanics(dt: dt)
             updateBossProjectiles()
             updateGrappleTarget()
@@ -2181,7 +2232,10 @@ final class GameScene: SKScene {
             target = k.position; text = "KEY"; color = Palette.energy
         } else {
             switch objective {
-            case .collect: if let c = nearestCrystal() { target = c.position; text = "CRYSTAL"; color = Palette.crystal }
+            case .collect:
+                if let site = sites.filter({ !$0.done }).min(by: { $0.node.position.distance(to: player.position) < $1.node.position.distance(to: player.position) }) {
+                    target = site.node.position; text = level.mission == .rescue ? "CAGE" : (level.waterRects.isEmpty ? "SWITCH" : "PUMP"); color = Palette.energy
+                } else if let c = nearestCrystal() { target = c.position; text = "CRYSTAL"; color = Palette.crystal }
             case .charge:  target = powerCore?.position; text = "CORE"; color = biome.accent
             case .reachExit: target = exitPortal?.position; text = level.exitLabel; color = biome.accent
             case .boss:    target = villain?.position; text = "FIGHT"; color = Palette.heroRed
@@ -2197,7 +2251,7 @@ final class GameScene: SKScene {
         let r = min(size.width, size.height) * 0.30
         objectiveArrow.position = CGPoint(x: cos(ang) * r, y: sin(ang) * r * 0.78 + size.height * 0.04)
         (objectiveArrow.childNode(withName: "tri") as? SKShapeNode).map { $0.zRotation = ang; $0.fillColor = color }
-        (objectiveArrow.childNode(withName: "//lbl") as? SKLabelNode)?.text = "\(text)  \(Int(dist/10))m"
+        (objectiveArrow.childNode(withName: "//lbl") as? RichLabel)?.text = "\(text)  \(Int(dist/10))m"
     }
 
     // MARK: - Grapple
@@ -2214,7 +2268,7 @@ final class GameScene: SKScene {
         }
         grappleTarget = best
         if let t = best {
-            grappleBtn.isHidden = false; grappleBtn.setEnabled(true)
+            grappleBtn.isHidden = true   // grapple is offered through the ACTION button
             if t.action(forKey: "ghi") == nil {
                 t.run(.repeatForever(.sequence([.scale(to: 1.25, duration: 0.4), .scale(to: 1.0, duration: 0.4)])), withKey: "ghi")
             }
@@ -2260,13 +2314,162 @@ final class GameScene: SKScene {
         if caught { handleCaught() }
     }
 
+    // MARK: - Rescue / sabotage sites
+
+    private func addSite(at p: CGPoint, index: Int) {
+        let node = SKNode(); node.position = p; node.zPosition = ZLayer.items
+        if level.mission == .rescue {
+            let base = SKShapeNode(rectOf: CGSize(width: 64, height: 58), cornerRadius: 8)
+            base.fillColor = SKColor(white: 0.12, alpha: 0.85); base.strokeColor = SKColor(white: 0.55, alpha: 1); base.lineWidth = 3
+            node.addChild(base)
+            let tints = [Palette.heroRed, SKColor(red: 0.8, green: 0.6, blue: 0.85, alpha: 1), SKColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1), Palette.energy]
+            let who = SKNode(); who.name = "who"
+            let body = SKShapeNode(ellipseOf: CGSize(width: 26, height: 30)); body.fillColor = tints[index % tints.count]; body.strokeColor = .clear
+            body.position = CGPoint(x: 0, y: -8); who.addChild(body)
+            let head = SKShapeNode(circleOfRadius: 11); head.fillColor = SKColor(red: 0.95, green: 0.79, blue: 0.63, alpha: 1); head.strokeColor = .clear
+            head.position = CGPoint(x: 0, y: 12); who.addChild(head)
+            who.run(.repeatForever(.sequence([.moveBy(x: 0, y: 3, duration: 0.4), .moveBy(x: 0, y: -3, duration: 0.4)])))
+            node.addChild(who)
+            let bars = SKNode(); bars.name = "bars"
+            for x in stride(from: -24.0, through: 24.0, by: 12.0) {
+                let bar = SKShapeNode(rectOf: CGSize(width: 4, height: 58), cornerRadius: 2)
+                bar.fillColor = SKColor(white: 0.75, alpha: 1); bar.strokeColor = .clear; bar.position.x = x; bars.addChild(bar)
+            }
+            let help = RichLabel(text: "HELP!"); help.fontName = "AvenirNext-Heavy"; help.fontSize = 11; help.fontColor = .white
+            help.position = CGPoint(x: 0, y: 40); help.name = "help"
+            help.run(.repeatForever(.sequence([.fadeAlpha(to: 0.3, duration: 0.5), .fadeAlpha(to: 1, duration: 0.5)])))
+            node.addChild(bars); node.addChild(help)
+        } else {
+            let pumps = !level.waterRects.isEmpty
+            let accent = pumps ? Palette.water : Palette.energy
+            let box = SKShapeNode(rectOf: CGSize(width: 56, height: 56), cornerRadius: 10)
+            box.fillColor = SKColor(white: 0.2, alpha: 1); box.strokeColor = accent; box.lineWidth = 3
+            node.addChild(box)
+            let coil = SKShapeNode(circleOfRadius: 15); coil.name = "coil"
+            coil.fillColor = accent.withAlphaComponent(0.85); coil.strokeColor = .white; coil.lineWidth = 2; coil.glowWidth = 6
+            coil.run(.repeatForever(.sequence([.scale(to: 1.12, duration: 0.3), .scale(to: 0.94, duration: 0.3)])))
+            node.addChild(coil)
+            let tag = RichLabel(text: pumps ? "PUMP" : "GEN"); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 10; tag.fontColor = .white
+            tag.position = CGPoint(x: 0, y: -44); node.addChild(tag)
+        }
+        let ring = SKShapeNode(); ring.strokeColor = Palette.energy; ring.lineWidth = 6; ring.lineCap = .round
+        ring.zPosition = 2; ring.glowWidth = 2; node.addChild(ring)
+        worldNode.addChild(node)
+        sites.append(ObjectiveSite(node: node, ring: ring))
+    }
+
+    private func updateSites(dt: TimeInterval) {
+        guard objective == .collect, !sites.isEmpty else { return }
+        let holdTime: Double = level.mission == .rescue ? 1.2 : 1.6
+        for site in sites where !site.done {
+            let near = site.node.position.distance(to: player.position) < 62 && player.inCostume
+            // Progress fills while you stay; it drains (not resets) if you step away, so retries feel fair.
+            site.progress = max(0, min(1, site.progress + (near ? dt / holdTime : -dt / (holdTime * 2))))
+            if site.progress > 0 {
+                site.ring.path = UIBezierPath(arcCenter: .zero, radius: 44, startAngle: .pi / 2,
+                                              endAngle: .pi / 2 - CGFloat(site.progress) * .pi * 2, clockwise: false).cgPath
+            } else { site.ring.path = nil }
+            if site.progress >= 1 { completeSite(site) }
+        }
+    }
+
+    private func completeSite(_ site: ObjectiveSite) {
+        site.done = true; site.ring.path = nil; Haptics.success()
+        let p = site.node.position
+        crystals += 1
+        setCheckpoint(p)
+        SoundFX.shared.play("powerup")
+        if level.mission == .rescue {
+            site.node.childNode(withName: "bars")?.run(.sequence([.group([.moveBy(x: 0, y: 40, duration: 0.3), .fadeOut(withDuration: 0.3)]), .removeFromParent()]))
+            site.node.childNode(withName: "help")?.removeFromParent()
+            if let who = site.node.childNode(withName: "who") {
+                who.removeAllActions()
+                // Cheer, then run for home.
+                let home = CGPoint(x: level.heroSpawn.x - p.x, y: level.heroSpawn.y - p.y)
+                who.run(.sequence([.moveBy(x: 0, y: 26, duration: 0.18), .moveBy(x: 0, y: -26, duration: 0.18),
+                                   .group([.move(to: home, duration: 2.4), .sequence([.wait(forDuration: 1.6), .fadeOut(withDuration: 0.8)])]),
+                                   .removeFromParent()]))
+            }
+            blip(CGPoint(x: p.x, y: p.y + 50), "THANK YOU!", Palette.energy)
+            hud.showToast("Freed! (\(crystals)/\(level.crystalsRequired))", color: Palette.energy)
+        } else {
+            if let coil = site.node.childNode(withName: "coil") as? SKShapeNode {
+                coil.removeAllActions(); coil.fillColor = SKColor(white: 0.35, alpha: 1); coil.glowWidth = 0; coil.setScale(0.9)
+            }
+            var effect = ""
+            // Generators kill nearby lasers; pumps drain the nearest flooded tunnel.
+            let dead = lasers.filter { $0.position.distance(to: p) < 480 }
+            for beam in dead {
+                beam.removeAllActions(); beam.run(.sequence([.fadeOut(withDuration: 0.3), .removeFromParent()])); effect = " Lasers down!"
+            }
+            lasers.removeAll { $0.position.distance(to: p) < 480 }   // stop colliding immediately
+            if let idx = waterRects.indices.min(by: { hypot(waterRects[$0].midX - p.x, waterRects[$0].midY - p.y) < hypot(waterRects[$1].midX - p.x, waterRects[$1].midY - p.y) }),
+               hypot(waterRects[idx].midX - p.x, waterRects[idx].midY - p.y) < 650 {
+                let r = waterRects.remove(at: idx)
+                for case let w as SKShapeNode in worldNode.children where w.name == "water" && w.frame.insetBy(dx: -8, dy: -8).contains(CGPoint(x: r.midX, y: r.midY)) {
+                    w.run(.sequence([.fadeOut(withDuration: 1.0), .removeFromParent()]))
+                }
+                effect = " Tunnel drained!"
+            }
+            shake(5, 0.2)
+            hud.showToast("Shut down! (\(crystals)/\(level.crystalsRequired))\(effect)", color: Palette.energy)
+        }
+        hud.updateCrystals(crystals)
+        hud.updateObjective(level: "Level \(level.index) · \(level.name)", title: level.objective, hint: objectiveHint(), progress: progressText())
+        if crystals >= level.crystalsRequired { advanceFromCollect() }
+    }
+
+    private func setCheckpoint(_ p: CGPoint) {
+        guard p.distance(to: checkpoint) > 150 else { return }
+        checkpoint = p
+        blip(CGPoint(x: p.x, y: p.y + 30), "CHECKPOINT", biome.accent)
+    }
+
+    // MARK: - Star rating
+
+    /// ★1 finish · ★2 never hit/spotted · ★3 all coins (chases: finish in par time).
+    private struct StarResult { let earned: [Bool]; let labels: [String] }
+    private func starResult() -> StarResult {
+        let clean = timesHit == 0
+        let third: Bool; let thirdLabel: String
+        if level.isDriving {
+            let par: TimeInterval = level.isBoat ? 45 : 40
+            third = levelTime <= par; thirdLabel = "Under \(Int(par))s (\(Int(levelTime))s)"
+        } else if level.coinSpots.isEmpty {
+            third = lives == maxLives; thirdLabel = "Full health"
+        } else {
+            third = levelCoins >= level.coinSpots.count
+            thirdLabel = "All coins (\(levelCoins)/\(level.coinSpots.count))"
+        }
+        return StarResult(earned: [true, clean, third],
+                          labels: ["Mission complete", level.isDriving ? "No crashes" : "Never spotted", thirdLabel])
+    }
+    static func bestStars(_ lvl: LevelData) -> Int { UserDefaults.standard.integer(forKey: "kaiditya.stars.\(lvl.name)") }
+    private func recordStars(_ n: Int) {
+        let key = "kaiditya.stars.\(level.name)"
+        UserDefaults.standard.set(max(n, UserDefaults.standard.integer(forKey: key)), forKey: key)
+    }
+
+    static func starRow(_ n: Int, size: CGFloat) -> SKNode {
+        let row = SKNode()
+        for i in 0..<3 {
+            let st = SKSpriteNode(texture: GlyphIcon.star.texture(size: size * UIScreen.main.scale, color: .white))
+            st.size = CGSize(width: size, height: size)
+            st.position = CGPoint(x: CGFloat(i - 1) * size * 1.05, y: 0)
+            if i >= n { st.color = SKColor(white: 0.35, alpha: 1); st.colorBlendFactor = 1; st.alpha = 0.8 }
+            row.addChild(st)
+        }
+        return row
+    }
+
     private func handleCaught() {
         guard caughtCooldown <= 0 else { return }
         caughtCooldown = 2.0
         let flash = SKSpriteNode(color: SKColor(red:1,green:0,blue:0,alpha:0.4), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
-        SoundFX.shared.play("caught"); shake(9, 0.25)
+        SoundFX.shared.play("caught"); shake(9, 0.25); Haptics.hit()
+        timesHit += 1
         lives = max(0, lives - 1)
         hud.setLives(lives, max: maxLives)
 
@@ -2290,8 +2493,8 @@ final class GameScene: SKScene {
                 player.position.y = max(40, min(worldSize.height - 40, player.position.y + away.dy/len * 120))
             }
         } else {
-            hud.showToast("Spotted! 💔 \(lives) left", color: Palette.heroRed)
-            player.position = level.heroSpawn
+            hud.showToast("Spotted! 💔 \(lives) left — back to checkpoint", color: Palette.heroRed)
+            player.position = checkpoint
         }
         for m in minions { m.setSeeing(false, dt: 1) }
     }
@@ -2308,11 +2511,12 @@ final class GameScene: SKScene {
     private func collectCrystal(_ c: SKShapeNode) {
         c.removeFromParent()
         crystals += 1
+        setCheckpoint(c.position); Haptics.tap()
         player.addEnergy(18)
         SoundFX.shared.play("collect")
         hud.updateCrystals(crystals)
         hud.showToast("Energy Crystal! ✦  (\(crystals)/\(level.crystalsRequired))", color: Palette.crystal)
-        let spark = SKLabelNode(text: "✦"); spark.fontSize = 28; spark.fontColor = Palette.crystal
+        let spark = RichLabel(text: "✦"); spark.fontSize = 28; spark.fontColor = Palette.crystal
         spark.position = c.position; spark.zPosition = ZLayer.fx; worldNode.addChild(spark)
         spark.run(.sequence([.group([.moveBy(x:0,y:44,duration:0.5), .fadeOut(withDuration:0.5)]), .removeFromParent()]))
         hud.updateObjective(level: "Level \(level.index) · \(level.name)", title: level.objective, hint: objectiveHint(), progress: progressText())
@@ -2359,6 +2563,7 @@ final class GameScene: SKScene {
             burst.run(.sequence([.group([.scale(to: 6, duration: 0.5), .fadeOut(withDuration: 0.5)]), .removeFromParent()]))
             showLevelComplete()
         } else {
+            recordStars(starResult().earned.filter { $0 }.count)
             showWinScreen()
         }
     }
@@ -2383,6 +2588,13 @@ final class GameScene: SKScene {
                 enabled = true; label = "FIGHT"; nearestInteract = { [weak self] in self?.fightVillain() }
             }
         }
+        // Nothing to talk to? Offer a grapple through the same button.
+        var iconKey = "interact"
+        if !enabled, grappleTarget != nil, !grappling {
+            enabled = true; label = "GRAPPLE"; iconKey = "grapple"
+            nearestInteract = { [weak self] in self?.grapple() }
+        }
+        interactBtn.setIcon(iconKey)
         interactBtn.setTitle(label)
         interactBtn.setEnabled(enabled)
     }
@@ -2452,7 +2664,7 @@ final class GameScene: SKScene {
 
     private func giveCarriedItem(_ glyph: String) {
         carriedItem?.removeFromParent()
-        let item = SKLabelNode(text: glyph); item.fontSize = 26; item.verticalAlignmentMode = .center
+        let item = RichLabel(text: glyph); item.fontSize = 26; item.verticalAlignmentMode = .center
         item.position = CGPoint(x: 0, y: 58); item.zPosition = ZLayer.fx
         item.run(.repeatForever(.sequence([.moveBy(x: 0, y: 5, duration: 0.5), .moveBy(x: 0, y: -5, duration: 0.5)])))
         player.addChild(item); carriedItem = item
@@ -2523,7 +2735,7 @@ final class GameScene: SKScene {
             chestNode?.removeFromParent()
             let closed = CharacterFactory.makeChest(glowing: false)
             closed.position = chestPos; closed.zPosition = ZLayer.items
-            let tag = SKLabelNode(text: "DAILY"); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 11
+            let tag = RichLabel(text: "DAILY"); tag.fontName = "AvenirNext-Heavy"; tag.fontSize = 11
             tag.fontColor = Palette.energy; tag.position = CGPoint(x: 0, y: -34); closed.addChild(tag)
             worldNode.addChild(closed); chestNode = closed
         } else {
@@ -2543,18 +2755,18 @@ final class GameScene: SKScene {
 
         let bg = SKSpriteNode(color: SKColor(red: 0.08, green: 0.12, blue: 0.22, alpha: 1), size: CGSize(width: 4000, height: 4000))
         mgLayer.addChild(bg)
-        let title = SKLabelNode(text: "CRYSTAL CATCH"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 24
+        let title = RichLabel(text: "CRYSTAL CATCH"); title.fontName = "AvenirNext-Heavy"; title.fontSize = 24
         title.fontColor = Palette.crystal; title.position = CGPoint(x: 0, y: size.height/2 - safeTop - 44); mgLayer.addChild(title)
-        let score = SKLabelNode(text: "0 ★"); score.name = "mgScore"; score.fontName = "AvenirNext-Heavy"; score.fontSize = 20
+        let score = RichLabel(text: "0 ★"); score.name = "mgScore"; score.fontName = "AvenirNext-Heavy"; score.fontSize = 20
         score.fontColor = Palette.energy; score.horizontalAlignmentMode = .left
         score.position = CGPoint(x: -size.width/2 + 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(score)
-        let timer = SKLabelNode(text: "30s"); timer.name = "mgTimer"; timer.fontName = "AvenirNext-Heavy"; timer.fontSize = 20
+        let timer = RichLabel(text: "30s"); timer.name = "mgTimer"; timer.fontName = "AvenirNext-Heavy"; timer.fontSize = 20
         timer.fontColor = .white; timer.horizontalAlignmentMode = .right
         timer.position = CGPoint(x: size.width/2 - 24, y: size.height/2 - safeTop - 44); mgLayer.addChild(timer)
-        let best = SKLabelNode(text: "BEST  \(Economy.bestCatch) ★")
+        let best = RichLabel(text: "BEST  \(Economy.bestCatch) ★")
         best.fontName = "AvenirNext-Bold"; best.fontSize = 13; best.fontColor = Palette.crystal
         best.position = CGPoint(x: 0, y: size.height/2 - safeTop - 70); mgLayer.addChild(best)
-        let hint = SKLabelNode(text: "Drag / arrows to catch the crystals!")
+        let hint = RichLabel(text: "Drag / arrows to catch the crystals!")
         hint.fontName = "AvenirNext-Medium"; hint.fontSize = 13; hint.fontColor = Palette.hudAccent
         hint.position = CGPoint(x: 0, y: size.height/2 - safeTop - 92); mgLayer.addChild(hint)
 
@@ -2571,7 +2783,7 @@ final class GameScene: SKScene {
         let quit = SKShapeNode(circleOfRadius: 22); quit.name = "mgQuit"
         quit.fillColor = Palette.hudPanel; quit.strokeColor = Palette.heroRed; quit.lineWidth = 1.5
         quit.position = CGPoint(x: -size.width/2 + 40, y: -size.height/2 + safeBottom + 40); quit.zPosition = 6
-        let qx = SKLabelNode(text: "✕"); qx.fontName = "AvenirNext-Heavy"; qx.fontSize = 20
+        let qx = RichLabel(text: "✕"); qx.fontName = "AvenirNext-Heavy"; qx.fontSize = 20
         qx.fontColor = .white; qx.verticalAlignmentMode = .center; quit.addChild(qx)
         mgLayer.addChild(quit)
     }
@@ -2585,7 +2797,7 @@ final class GameScene: SKScene {
 
         // Timer.
         mgTime -= dt
-        (mgLayer.childNode(withName: "mgTimer") as? SKLabelNode)?.text = "\(max(0, Int(ceil(mgTime))))s"
+        (mgLayer.childNode(withName: "mgTimer") as? RichLabel)?.text = "\(max(0, Int(ceil(mgTime))))s"
         if mgTime <= 0 { endMinigame(); return }
 
         // Spawn falling crystals.
@@ -2603,7 +2815,7 @@ final class GameScene: SKScene {
             c.zRotation += CGFloat(dt) * 3
             if c.position.y <= catchY + 18 && c.position.y >= catchY - 24 && abs(c.position.x - catcher.position.x) < 52 {
                 c.removeFromParent(); mgScore += 1
-                (mgLayer.childNode(withName: "mgScore") as? SKLabelNode)?.text = "\(mgScore) ★"
+                (mgLayer.childNode(withName: "mgScore") as? RichLabel)?.text = "\(mgScore) ★"
                 SoundFX.shared.play("coin")
                 blipMG(c.position, "+1", Palette.energy)
             } else if c.position.y < -size.height/2 - 30 {
@@ -2614,7 +2826,7 @@ final class GameScene: SKScene {
     }
 
     private func blipMG(_ pos: CGPoint, _ text: String, _ color: SKColor) {
-        let s = SKLabelNode(text: text); s.fontName = "AvenirNext-Heavy"; s.fontSize = 18; s.fontColor = color
+        let s = RichLabel(text: text); s.fontName = "AvenirNext-Heavy"; s.fontSize = 18; s.fontColor = color
         s.position = pos; s.zPosition = 5; mgLayer.addChild(s)
         s.run(.sequence([.group([.moveBy(x: 0, y: 40, duration: 0.5), .fadeOut(withDuration: 0.5)]), .removeFromParent()]))
     }
@@ -2627,16 +2839,16 @@ final class GameScene: SKScene {
         SoundFX.shared.play("clear")
         let card = roundedRect(size: CGSize(width: min(size.width - 60, 380), height: 220), corner: 20, color: Palette.hudPanel)
         card.strokeColor = Palette.energy; card.lineWidth = 3; card.zPosition = 10; mgLayer.addChild(card)
-        let t = SKLabelNode(text: newBest ? "NEW BEST! 🎉" : "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"
+        let t = RichLabel(text: newBest ? "NEW BEST! 🎉" : "TIME'S UP!"); t.fontName = "AvenirNext-Heavy"
         t.fontSize = 26; t.fontColor = Palette.energy; t.position = CGPoint(x: 0, y: 70); card.addChild(t)
-        let r = SKLabelNode(text: "Caught \(mgScore) crystals"); r.fontName = "AvenirNext-Bold"; r.fontSize = 17; r.fontColor = .white
+        let r = RichLabel(text: "Caught \(mgScore) crystals"); r.fontName = "AvenirNext-Bold"; r.fontSize = 17; r.fontColor = .white
         r.position = CGPoint(x: 0, y: 30); card.addChild(r)
-        let bestL = SKLabelNode(text: "Best: \(Economy.bestCatch)"); bestL.fontName = "AvenirNext-Medium"; bestL.fontSize = 14
+        let bestL = RichLabel(text: "Best: \(Economy.bestCatch)"); bestL.fontName = "AvenirNext-Medium"; bestL.fontSize = 14
         bestL.fontColor = Palette.crystal; bestL.position = CGPoint(x: 0, y: 4); card.addChild(bestL)
-        let c = SKLabelNode(text: newBest ? "+\(mgScore) ★  +5 bonus!" : "+\(mgScore) ★  coins")
+        let c = RichLabel(text: newBest ? "+\(mgScore) ★  +5 bonus!" : "+\(mgScore) ★  coins")
         c.fontName = "AvenirNext-Heavy"; c.fontSize = 18; c.fontColor = Palette.crystal
         c.position = CGPoint(x: 0, y: -24); card.addChild(c)
-        let go = SKLabelNode(text: "tap to continue ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
+        let go = RichLabel(text: "tap to continue ▸"); go.fontName = "AvenirNext-Bold"; go.fontSize = 13; go.fontColor = Palette.hudAccent
         go.position = CGPoint(x: 0, y: -68); card.addChild(go)
         dramatize(card, in: mgLayer, accent: Palette.energy, rays: false)
     }
@@ -2763,7 +2975,7 @@ final class GameScene: SKScene {
             return
         }
         // A quick punch spark toward the boss (the player stays under joystick control).
-        let spark = SKLabelNode(text: "💥"); spark.fontSize = 26
+        let spark = RichLabel(text: "💥"); spark.fontSize = 26
         spark.position = CGPoint(x: (player.position.x + v.position.x)/2, y: (player.position.y + v.position.y)/2)
         spark.zPosition = ZLayer.fx; worldNode.addChild(spark)
         spark.run(.sequence([.group([.scale(to: 1.6, duration: 0.2), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
@@ -2952,7 +3164,7 @@ final class GameScene: SKScene {
         bossHits += 1
         run(.wait(forDuration: 0.45), withKey: "hitCooldown")
         v.run(.sequence([.scale(to: 0.8, duration: 0.1), .scale(to: 1.0, duration: 0.1)]))
-        let pow = SKLabelNode(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
+        let pow = RichLabel(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
         pow.position = CGPoint(x: v.position.x, y: v.position.y + 50); pow.zPosition = ZLayer.fx; worldNode.addChild(pow)
         pow.run(.sequence([.group([.moveBy(x:0,y:30,duration:0.4), .fadeOut(withDuration:0.4)]), .removeFromParent()]))
         SoundFX.shared.play("hit"); shake(8, 0.18)
@@ -3062,6 +3274,7 @@ final class GameScene: SKScene {
         switch objective {
         case .collect:
             if let c = crystalNodes.first(where: { $0.parent != nil }) { demoSteer(to: c.position) }
+            else if let site = sites.first(where: { !$0.done }) { demoSteer(to: site.node.position) }
         case .charge:
             if let core = powerCore { demoSteer(to: core.position); if core.position.distance(to: player.position) < 70, tap(0.4) { chargeCore() } }
         case .reachExit:

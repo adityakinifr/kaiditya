@@ -6,7 +6,7 @@ final class Minion: SKNode {
     private let body: SKNode
     private let cone: SKShapeNode
     private let innerCone = SKShapeNode()
-    private let alertMark = SKLabelNode(text: "?")
+    private let alertMark = RichLabel(text: "?")
 
     private let waypoints: [CGPoint]
     private var wpIndex = 0
@@ -107,7 +107,7 @@ final class Minion: SKNode {
             .group([.rotate(byAngle: .pi * 2, duration: 0.4), .scale(to: 0.8, duration: 0.2)]),
             .scale(to: 1.0, duration: 0.2)
         ]))
-        let zzz = SKLabelNode(text: "💫")
+        let zzz = RichLabel(text: "💫")
         zzz.fontSize = 22
         zzz.position = CGPoint(x: 0, y: 48)
         zzz.zPosition = ZLayer.fx

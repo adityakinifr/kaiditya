@@ -2,6 +2,8 @@ import SpriteKit
 
 /// Visual + gameplay theme for a level.
 enum CoverShape { case bush, crate, pillar }
+/// What the "collect" phase of a level asks for. All three feed the same N/required counter.
+enum MissionKind { case crystals, rescue, sabotage }
 enum AmbientFX { case none, fireflies, embers, sparks }
 
 struct Biome {
@@ -75,6 +77,8 @@ struct LevelData {
     var grappleAnchors: [CGPoint] = []     // zip-to grapple points
     var hazardSpots: [CGPoint] = []        // stationary electric traps (cost a life)
     var isHub: Bool = false                // free-roam home town
+    var mission: MissionKind = .crystals   // rescue: free caged citizens · sabotage: shut down generators/pumps
+    var siteSpots: [CGPoint] = []          // cages / generators (hold to complete)
 }
 
 enum Biomes {
@@ -233,7 +237,9 @@ enum Biomes {
 }
 
 enum Levels {
-    static let all: [LevelData] = [level1, chase, level2, rooftops, lab, sewers, gauntlet, harbor, powerplant, level3, fortress]
+    // Ordered so difficulty only climbs: enemy speed/range, patrol count and crystal targets rise
+    // monotonically, and each level introduces at most one or two new mechanics.
+    static let all: [LevelData] = [level1, chase, level2, lab, sewers, rooftops, harbor, level3, gauntlet, powerplant, fortress]
 
     /// Free-roam home town (not part of the playable progression).
     static let hub = LevelData(
@@ -344,18 +350,14 @@ enum Levels {
     static let level2 = LevelData(
         index: 3,
         name: "Static Docks",
-        subtitle: "Follow the stolen power to the harbor at dusk.",
+        subtitle: "Chow-Chow locked up the dock crew — sneak in and free them.",
         biome: Biomes.docks,
         worldSize: CGSize(width: 2800, height: 1900),
         heroSpawn: CGPoint(x: 360, y: 950),
         corePos: nil,
         exitPos: CGPoint(x: 2600, y: 1500),
-        crystalsRequired: 6,
-        crystalSpots: [
-            CGPoint(x: 1200, y: 700), CGPoint(x: 1500, y: 1300), CGPoint(x: 1850, y: 800),
-            CGPoint(x: 2050, y: 1450), CGPoint(x: 2300, y: 1000), CGPoint(x: 2500, y: 700),
-            CGPoint(x: 1650, y: 1550), CGPoint(x: 2350, y: 1500)
-        ],
+        crystalsRequired: 4,
+        crystalSpots: [],
         minionPatrols: [
             [CGPoint(x: 1100, y: 600), CGPoint(x: 1100, y: 1300)],
             [CGPoint(x: 1450, y: 900), CGPoint(x: 1900, y: 900)],
@@ -363,7 +365,7 @@ enum Levels {
             [CGPoint(x: 2300, y: 800), CGPoint(x: 2600, y: 800), CGPoint(x: 2600, y: 1300)],
             [CGPoint(x: 1700, y: 1400), CGPoint(x: 2200, y: 1400)]
         ],
-        minionSpeed: 95, minionRange: 170,
+        minionSpeed: 85, minionRange: 160,
         coverSpots: [
             CGPoint(x: 1150, y: 850), CGPoint(x: 1400, y: 1150), CGPoint(x: 1700, y: 700),
             CGPoint(x: 1950, y: 1000), CGPoint(x: 2150, y: 1300), CGPoint(x: 2400, y: 850),
@@ -381,30 +383,29 @@ enum Levels {
         signs: [("⚓ STATIC DOCKS", CGPoint(x: 760, y: 760)), ("DANGER", CGPoint(x: 2000, y: 1720))],
         npcs: [],
         hasBoss: false,
-        objective: "Sneak the docks; recover 6 Crystals",
-        exitLabel: "FERRY")
+        objective: "Free 4 dock workers from the cages",
+        exitLabel: "FERRY",
+        mission: .rescue,
+        siteSpots: [CGPoint(x: 1200, y: 700), CGPoint(x: 1850, y: 800), CGPoint(x: 2050, y: 1450), CGPoint(x: 2500, y: 700)])
 
     static let level3 = LevelData(
-        index: 10,
+        index: 8,
         name: "Static Tower",
-        subtitle: "Climb his tower — but Chow-Chow slips away to his fortress!",
+        subtitle: "Climb his tower — but Chow-Chow slips away downtown!",
         biome: Biomes.tower,
         worldSize: CGSize(width: 2500, height: 2000),
         heroSpawn: CGPoint(x: 1250, y: 320),
         corePos: nil,
         exitPos: CGPoint(x: 1250, y: 1700),
-        crystalsRequired: 4,
-        crystalSpots: [
-            CGPoint(x: 600, y: 800), CGPoint(x: 1900, y: 800), CGPoint(x: 600, y: 1300),
-            CGPoint(x: 1900, y: 1300), CGPoint(x: 1250, y: 1050)
-        ],
+        crystalsRequired: 3,
+        crystalSpots: [],
         minionPatrols: [
             [CGPoint(x: 700, y: 700), CGPoint(x: 700, y: 1400)],
             [CGPoint(x: 1800, y: 700), CGPoint(x: 1800, y: 1400)],
             [CGPoint(x: 900, y: 1050), CGPoint(x: 1600, y: 1050)],
             [CGPoint(x: 1250, y: 600), CGPoint(x: 1250, y: 1300)]
         ],
-        minionSpeed: 110, minionRange: 185,
+        minionSpeed: 105, minionRange: 170,
         coverSpots: [
             CGPoint(x: 750, y: 950), CGPoint(x: 1750, y: 950), CGPoint(x: 750, y: 1200),
             CGPoint(x: 1750, y: 1200), CGPoint(x: 1050, y: 800), CGPoint(x: 1450, y: 800),
@@ -418,17 +419,19 @@ enum Levels {
         signs: [("⚡ STATIC TOWER ⚡", CGPoint(x: 1250, y: 200))],
         npcs: [],
         hasBoss: false,
-        objective: "Climb the tower; grab 4 Crystals",
+        objective: "Rescue Mia, Granny Gold & Tommy",
         exitLabel: "TOP",
         coinSpots: [CGPoint(x: 800, y: 1050), CGPoint(x: 1700, y: 1050), CGPoint(x: 1250, y: 700)],
         searchlights: [CGPoint(x: 1000, y: 700), CGPoint(x: 1500, y: 1400)],
         starSpots: [CGPoint(x: 1250, y: 1300)],
-        hazardSpots: [CGPoint(x: 1100, y: 1000), CGPoint(x: 1650, y: 1300)])
+        hazardSpots: [CGPoint(x: 1100, y: 1000), CGPoint(x: 1650, y: 1300)],
+        mission: .rescue,
+        siteSpots: [CGPoint(x: 600, y: 800), CGPoint(x: 1900, y: 800), CGPoint(x: 1250, y: 1050)])
 
     // MARK: Expansion levels
 
     static let rooftops = LevelData(
-        index: 4,
+        index: 6,
         name: "City Rooftops",
         subtitle: "Chase the trail across the neon skyline — drones are watching.",
         biome: Biomes.rooftops,
@@ -442,7 +445,7 @@ enum Levels {
         minionPatrols: [[CGPoint(x: 1200, y: 600), CGPoint(x: 1200, y: 1350)],
                         [CGPoint(x: 1700, y: 700), CGPoint(x: 2100, y: 700)],
                         [CGPoint(x: 1900, y: 1300), CGPoint(x: 2300, y: 1300)]],
-        minionSpeed: 120, minionRange: 165,
+        minionSpeed: 100, minionRange: 165,
         coverSpots: [CGPoint(x: 1150, y: 900), CGPoint(x: 1450, y: 1050), CGPoint(x: 1750, y: 900),
                      CGPoint(x: 2000, y: 1100), CGPoint(x: 1300, y: 700), CGPoint(x: 2200, y: 1000)],
         treeSpots: [],
@@ -461,7 +464,7 @@ enum Levels {
         grappleAnchors: [CGPoint(x: 1400, y: 1100), CGPoint(x: 2000, y: 1000), CGPoint(x: 1700, y: 1500)])
 
     static let lab = LevelData(
-        index: 5,
+        index: 4,
         name: "Secret Lab",
         subtitle: "Slip past the laser grid to the crystal vault.",
         biome: Biomes.lab,
@@ -474,7 +477,7 @@ enum Levels {
                        CGPoint(x: 2050, y: 1200), CGPoint(x: 1500, y: 900), CGPoint(x: 2200, y: 750)],
         minionPatrols: [[CGPoint(x: 1100, y: 600), CGPoint(x: 1100, y: 1250)],
                         [CGPoint(x: 1900, y: 700), CGPoint(x: 1900, y: 1250)]],
-        minionSpeed: 95, minionRange: 160,
+        minionSpeed: 90, minionRange: 160,
         coverSpots: [CGPoint(x: 1000, y: 900), CGPoint(x: 1400, y: 750), CGPoint(x: 1750, y: 1050),
                      CGPoint(x: 2100, y: 950), CGPoint(x: 1300, y: 1300)],
         treeSpots: [],
@@ -487,28 +490,25 @@ enum Levels {
         exitLabel: "VAULT",
         laserGates: [CGPoint(x: 1200, y: 1000), CGPoint(x: 1600, y: 1300), CGPoint(x: 1900, y: 700),
                      CGPoint(x: 2200, y: 1100)],
+        // Introduces lasers (+ a magnet helper). Water, grapple and traps come later.
         speedPads: [CGPoint(x: 800, y: 900), CGPoint(x: 1600, y: 600), CGPoint(x: 2000, y: 1300)],
-        magnetSpots: [CGPoint(x: 1250, y: 600)],
-        waterRects: [CGRect(x: 1350, y: 700, width: 260, height: 200)],
-        grappleAnchors: [CGPoint(x: 1250, y: 900), CGPoint(x: 1700, y: 900), CGPoint(x: 2150, y: 1100)],
-        hazardSpots: [CGPoint(x: 1050, y: 850), CGPoint(x: 1850, y: 1050)])
+        magnetSpots: [CGPoint(x: 1250, y: 600)])
 
     static let sewers = LevelData(
-        index: 6,
+        index: 5,
         name: "Flooded Sewers",
-        subtitle: "Wade through the murk — grab a Super Star if you can!",
+        subtitle: "Every pump you shut off drains a flooded tunnel.",
         biome: Biomes.sewers,
         worldSize: CGSize(width: 2600, height: 1900),
         heroSpawn: CGPoint(x: 300, y: 950),
         corePos: nil,
         exitPos: CGPoint(x: 2420, y: 950),
-        crystalsRequired: 5,
-        crystalSpots: [CGPoint(x: 1000, y: 700), CGPoint(x: 1400, y: 1300), CGPoint(x: 1800, y: 750),
-                       CGPoint(x: 2100, y: 1300), CGPoint(x: 1600, y: 1000), CGPoint(x: 2250, y: 800)],
+        crystalsRequired: 3,
+        crystalSpots: [],
         minionPatrols: [[CGPoint(x: 1100, y: 650), CGPoint(x: 1100, y: 1300)],
                         [CGPoint(x: 1550, y: 800), CGPoint(x: 2000, y: 800)],
                         [CGPoint(x: 1900, y: 1300), CGPoint(x: 2300, y: 1300)]],
-        minionSpeed: 105, minionRange: 165,
+        minionSpeed: 95, minionRange: 165,
         coverSpots: [CGPoint(x: 1050, y: 950), CGPoint(x: 1450, y: 1050), CGPoint(x: 1800, y: 1050),
                      CGPoint(x: 2150, y: 1000), CGPoint(x: 1300, y: 750)],
         treeSpots: [],
@@ -517,7 +517,7 @@ enum Levels {
         signs: [("🕳 SEWERS", CGPoint(x: 700, y: 1250))],
         npcs: [],
         hasBoss: false,
-        objective: "Wade the sewers; grab 5 Crystals",
+        objective: "Shut off 3 pumps to drain the sewers",
         exitLabel: "GRATE",
         coinSpots: [CGPoint(x: 900, y: 1100), CGPoint(x: 1500, y: 700), CGPoint(x: 1950, y: 1150),
                     CGPoint(x: 2250, y: 1100)],
@@ -525,10 +525,12 @@ enum Levels {
         waterRects: [CGRect(x: 700, y: 800, width: 500, height: 280),
                      CGRect(x: 1700, y: 1050, width: 520, height: 300)],
         dronesStyle: true,
-        grappleAnchors: [CGPoint(x: 950, y: 1250), CGPoint(x: 1500, y: 700), CGPoint(x: 1960, y: 1450)])
+        grappleAnchors: [CGPoint(x: 950, y: 1250), CGPoint(x: 1500, y: 700), CGPoint(x: 1960, y: 1450)],
+        mission: .sabotage,
+        siteSpots: [CGPoint(x: 1000, y: 700), CGPoint(x: 1800, y: 750), CGPoint(x: 2100, y: 1300)])
 
     static let harbor = LevelData(
-        index: 8,
+        index: 7,
         name: "Harbor Boat Chase",
         subtitle: "He's switched to a speedboat — give chase across the bay!",
         biome: Biomes.harbor,
@@ -586,7 +588,7 @@ enum Levels {
     // MARK: Big complex scenarios
 
     static let gauntlet = LevelData(
-        index: 7,
+        index: 9,
         name: "Downtown Gauntlet",
         subtitle: "A sprawling night-city run: lasers, drones, searchlights — find the keycard!",
         biome: Biomes.rooftops,
@@ -604,7 +606,7 @@ enum Levels {
                         [CGPoint(x: 2200, y: 600), CGPoint(x: 2800, y: 600)],
                         [CGPoint(x: 2500, y: 1300), CGPoint(x: 2500, y: 1900)],
                         [CGPoint(x: 2900, y: 900), CGPoint(x: 2900, y: 1700)]],
-        minionSpeed: 120, minionRange: 170,
+        minionSpeed: 110, minionRange: 175,
         coverSpots: [CGPoint(x: 950, y: 950), CGPoint(x: 1350, y: 1300), CGPoint(x: 1700, y: 900),
                      CGPoint(x: 2050, y: 1500), CGPoint(x: 2350, y: 1150), CGPoint(x: 2650, y: 1400),
                      CGPoint(x: 1550, y: 1850), CGPoint(x: 2850, y: 1000), CGPoint(x: 1200, y: 600)],
@@ -631,18 +633,16 @@ enum Levels {
         hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1700)])
 
     static let powerplant = LevelData(
-        index: 9,
+        index: 10,
         name: "The Power Plant",
-        subtitle: "Chow-Chow's reactor — a massive laser grid guards 8 crystals.",
+        subtitle: "The reactor powering his fortress. Each generator you cut kills nearby lasers.",
         biome: Biomes.tower,
         worldSize: CGSize(width: 3200, height: 2400),
         heroSpawn: CGPoint(x: 300, y: 1200),
         corePos: nil,
         exitPos: CGPoint(x: 2950, y: 1200),
-        crystalsRequired: 8,
-        crystalSpots: [CGPoint(x: 850, y: 700), CGPoint(x: 1200, y: 1700), CGPoint(x: 1600, y: 650),
-                       CGPoint(x: 1600, y: 1750), CGPoint(x: 2000, y: 1100), CGPoint(x: 2300, y: 700),
-                       CGPoint(x: 2300, y: 1700), CGPoint(x: 2650, y: 1100), CGPoint(x: 1000, y: 1150)],
+        crystalsRequired: 4,
+        crystalSpots: [],
         minionPatrols: [[CGPoint(x: 900, y: 500), CGPoint(x: 900, y: 1900)],
                         [CGPoint(x: 1400, y: 1000), CGPoint(x: 1900, y: 1000)],
                         [CGPoint(x: 1700, y: 1400), CGPoint(x: 1700, y: 2000)],
@@ -659,7 +659,7 @@ enum Levels {
         signs: [("⚛ POWER PLANT", CGPoint(x: 700, y: 1500)), ("HIGH VOLTAGE", CGPoint(x: 2400, y: 2100))],
         npcs: [],
         hasBoss: false,
-        objective: "Shut down the reactor: grab 8 Crystals",
+        objective: "Shut down 4 generators to kill the lasers",
         exitLabel: "CORE",
         coinSpots: [CGPoint(x: 1100, y: 900), CGPoint(x: 1500, y: 1500), CGPoint(x: 1900, y: 700),
                     CGPoint(x: 2200, y: 1400), CGPoint(x: 2500, y: 800), CGPoint(x: 2750, y: 1600)],
@@ -667,5 +667,7 @@ enum Levels {
                      CGPoint(x: 2300, y: 900), CGPoint(x: 2300, y: 1500), CGPoint(x: 2700, y: 1200)],
         magnetSpots: [CGPoint(x: 1000, y: 1700)],
         starSpots: [CGPoint(x: 2300, y: 1150)],
-        hazardSpots: [CGPoint(x: 1000, y: 1150), CGPoint(x: 1700, y: 1000), CGPoint(x: 2400, y: 1500)])
+        hazardSpots: [CGPoint(x: 1000, y: 1150), CGPoint(x: 1700, y: 1000), CGPoint(x: 2400, y: 1500)],
+        mission: .sabotage,
+        siteSpots: [CGPoint(x: 1600, y: 650), CGPoint(x: 1600, y: 1750), CGPoint(x: 2300, y: 700), CGPoint(x: 2300, y: 1700)])
 }

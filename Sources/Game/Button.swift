@@ -125,16 +125,18 @@ final class GameButton: SKNode {
     let key: String
     private let bg: SKShapeNode
     private let ring: SKShapeNode
-    private let label: SKLabelNode
-    private let icon: SKNode
+    private let label: RichLabel
+    private var icon: SKNode
+    private var iconKey: String
     private(set) var enabled = true
 
     init(key: String, glyph: String = "", title: String, color: SKColor, radius: CGFloat = 40) {
         self.key = key
         bg = SKShapeNode(circleOfRadius: radius)
         ring = SKShapeNode(circleOfRadius: radius)
-        label = SKLabelNode(text: title)
+        label = RichLabel(text: title)
         icon = ControlIcons.make(key)
+        iconKey = key
         super.init()
 
         bg.fillColor = color.withAlphaComponent(0.92)
@@ -149,7 +151,7 @@ final class GameButton: SKNode {
         addChild(ring)
 
         icon.zPosition = ZLayer.hud + 1
-        icon.setScale(1.0)
+        icon.setScale(radius / 38)
         addChild(icon)
 
         label.fontName = "AvenirNext-Bold"
@@ -170,10 +172,21 @@ final class GameButton: SKNode {
         alpha = on ? 1.0 : 0.34
     }
 
-    func setTitle(_ t: String) { label.text = t }
+    func setTitle(_ t: String) { if label.text != t { label.text = t } }
+
+    /// Swap the vector icon (the context ACTION button switches between talk/grapple).
+    func setIcon(_ key: String) {
+        guard key != iconKey else { return }
+        iconKey = key
+        let scale = icon.xScale
+        icon.removeFromParent()
+        icon = ControlIcons.make(key); icon.zPosition = ZLayer.hud + 1; icon.setScale(scale)
+        addChild(icon)
+    }
 
     func press() {
         guard enabled else { return }
+        Haptics.tap()
         bg.run(.sequence([.scale(to: 0.86, duration: 0.05), .scale(to: 1.0, duration: 0.08)]))
         // quick ring flash for feedback
         let flash = SKShapeNode(circleOfRadius: bg.frame.width/2)
@@ -186,4 +199,14 @@ final class GameButton: SKNode {
         let local = scene.convert(scenePoint, to: self)
         return bg.contains(local)
     }
+}
+
+/// Light haptic vocabulary: tap for buttons, success for objectives, hit when caught.
+enum Haptics {
+    private static let light = UIImpactFeedbackGenerator(style: .light)
+    private static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+    private static let note = UINotificationFeedbackGenerator()
+    static func tap() { light.impactOccurred() }
+    static func hit() { heavy.impactOccurred() }
+    static func success() { note.notificationOccurred(.success) }
 }
