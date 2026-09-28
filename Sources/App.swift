@@ -47,6 +47,7 @@ final class GameViewController: UIViewController {
     override func loadView() {
         let v = KeyboardSKView(frame: UIScreen.main.bounds)
         v.ignoresSiblingOrder = true
+        v.isMultipleTouchEnabled = true   // move with the joystick while pressing action buttons
         view = v
     }
 

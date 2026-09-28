@@ -63,10 +63,11 @@ final class GameScene: SKScene {
     private let maxLives = 5
     private var lives = 5
 
-    // Difficulty ramps gently with mission progression (levelIndex 0…10).
-    private var stealthAlertRate: CGFloat { 1.05 + CGFloat(levelIndex) * 0.10 }  // ~0.95s → ~0.5s to be spotted
-    private var stealthRangeMul: CGFloat { 1.0 + CGFloat(levelIndex) * 0.02 }    // up to ~1.2x vision range
-    private var stealthSpeedMul: CGFloat { 1.0 + CGFloat(levelIndex) * 0.025 }   // up to ~1.25x patrol/sweep
+    // Difficulty: patrol speed/range are authored per level in Levels.swift (final values,
+    // no hidden multipliers). Alert rate ramps from 1.25s to 0.8s of reaction time.
+    private static let alertRates: [CGFloat] = [0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.05, 1.10, 1.15, 1.20, 1.25]
+    private var stealthAlertRate: CGFloat { Self.alertRates[min(max(levelIndex, 0), Self.alertRates.count - 1)] }
+    private var searchlightSweep: CGFloat { 1.0 + CGFloat(levelIndex) * 0.015 }
     private var bossProjectiles: [SKNode] = []
     private var bossCharging = false
     private var bossAttackCounter = 0
@@ -135,6 +136,7 @@ final class GameScene: SKScene {
     private var timesHit = 0
     private var levelCoins = 0
     private var levelTime: TimeInterval = 0
+    private var timesSpotted = 0
     private var checkpoint: CGPoint = .zero
     /// Rescue cages / sabotage generators: stand next to one (as HERO) to fill its ring.
     private final class ObjectiveSite { let node: SKNode; let ring: SKShapeNode; var progress: Double = 0; var done = false
@@ -428,7 +430,7 @@ final class GameScene: SKScene {
         maxUnlocked = max(maxUnlocked, idx)
         UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
         bossHits = 0; crystals = 0; caughtCooldown = 0
-        timesHit = 0; levelCoins = 0; levelTime = 0; checkpoint = level.heroSpawn
+        timesHit = 0; timesSpotted = 0; levelCoins = 0; levelTime = 0; checkpoint = level.heroSpawn
         lives = maxLives; hud.setLives(lives, max: maxLives)
         nearestInteract = nil
         objective = level.isDriving ? .reachExit : .collect
@@ -485,7 +487,7 @@ final class GameScene: SKScene {
             }
         case .charge:  return "Bring them to the glowing Power Core"
         case .reachExit: return "Head to the \(level.exitLabel) portal!"
-        case .boss:    return "Use SHIELD, then DASH into Lord Chow-Chow!"
+        case .boss:    return "Get close as HERO and tap HIT! · SHIELD blocks his zaps"
         case .done:    return "Victory!"
         }
     }
@@ -502,8 +504,8 @@ final class GameScene: SKScene {
         for spot in level.crystalSpots { addCrystal(at: spot) }
         for (i, spot) in level.siteSpots.enumerated() { addSite(at: spot, index: i) }
         for wp in level.minionPatrols {
-            let m = Minion(waypoints: wp, speed: level.minionSpeed * stealthSpeedMul,
-                           range: level.minionRange * stealthRangeMul, drone: level.dronesStyle)
+            let m = Minion(waypoints: wp, speed: level.minionSpeed,
+                           range: level.minionRange, drone: level.dronesStyle)
             m.alertRate = stealthAlertRate
             worldNode.addChild(m); minions.append(m)
         }
@@ -558,9 +560,9 @@ final class GameScene: SKScene {
             worldNode.addChild(s); starNodes.append(s)
         }
         for p in level.searchlights {
-            let sl = Minion(waypoints: [p], speed: 0, range: max(level.minionRange, 175) * stealthRangeMul, rotating: true)
+            let sl = Minion(waypoints: [p], speed: 0, range: max(level.minionRange, 175), rotating: true)
             sl.alertRate = stealthAlertRate
-            sl.sweepSpeed = 1.1 * stealthSpeedMul
+            sl.sweepSpeed = searchlightSweep
             worldNode.addChild(sl); minions.append(sl)
         }
         for p in level.laserGates {
@@ -636,11 +638,11 @@ final class GameScene: SKScene {
         if starTimer <= 0 && !player.isShielded && !grappling {
             for beam in lasers where beam.alpha > 0.5
                 && abs(beam.position.x - pp.x) < 110 && abs(beam.position.y - pp.y) < 16 {
-                handleCaught(); break
+                handleCaught(.laser); break
             }
             // Electric traps cost a life on contact.
             for t in hazards where t.position.distance(to: pp) < 28 {
-                hud.showToast("Zapped by a trap! ⚡", color: Palette.heroRed); handleCaught(); break
+                handleCaught(.trap); break
             }
         }
         // Stealth takedown: reach a minion while unseen / dashing / starred.
@@ -1379,7 +1381,7 @@ final class GameScene: SKScene {
             ("🗺  Zones reached", "\(zonesReached) / \(Levels.all.count)"),
             ("🎯  Best arcade", "\(Economy.bestCatch)"),
             ("🥸  Costumes", "\(Economy.costumesOwned) / \(Costume.allCases.count)"),
-            ("🔥  Daily streak", "\(Economy.dailyStreak)")
+            ("⭐  Stars earned", "\(Levels.all.reduce(0) { $0 + UserDefaults.standard.integer(forKey: "kaiditya.stars.\($1.name)") }) / \(Levels.all.count * 3)")
         ]
         var y: CGFloat = 78
         for (label, value) in rows {
@@ -1852,8 +1854,10 @@ final class GameScene: SKScene {
         exitPortal = nil; powerCore = nil; villain = nil
         grappleAnchorNodes = []; grappleTarget = nil; grappling = false
         shopDoor = nil; arcadeDoor = nil; missionsPortal = nil; petNode = nil
-        coinNodes = []; questActive = false; questDone = false; questProgress = 0
-        deliverActive = false; deliverDone = false
+        // Errands are one-time: completion persists across shop/arcade trips and launches.
+        coinNodes = []; questActive = false; questProgress = 0
+        questDone = UserDefaults.standard.bool(forKey: "kaiditya.hub.questDone")
+        deliverActive = false; deliverDone = UserDefaults.standard.bool(forKey: "kaiditya.hub.deliverDone")
         carriedItem?.removeFromParent(); carriedItem = nil
         objective = .done
         player.removeFromParent(); player.resetForLevel()
@@ -1900,8 +1904,8 @@ final class GameScene: SKScene {
                 .moveBy(x: -dx, y: 0, duration: 2.2), .wait(forDuration: 0.6)
             ])))
         }
-        // Coins scattered around town.
-        for p in level.coinSpots {
+        // Tommy's lucky coins, scattered around town until his errand is done.
+        for p in level.coinSpots where !questDone {
             let c = CharacterFactory.makeCoin(); c.position = p; c.zPosition = ZLayer.items
             c.run(.repeatForever(.sequence([.scaleX(to: 0.3, duration: 0.4), .scaleX(to: 1, duration: 0.4)])))
             worldNode.addChild(c); coinNodes.append(c)
@@ -2163,7 +2167,7 @@ final class GameScene: SKScene {
 
         // Driving levels use a dedicated update path.
         if level.isDriving {
-            if state == .playing { updateDriving(dt: dt) }
+            if state == .playing { levelTime += dt; updateDriving(dt: dt) }
             player.update(dt: dt)
             cam.position = cameraWithShake(drivingCamera(), dt: dt)
             hud.updateEnergy(player.energyPct)
@@ -2191,7 +2195,7 @@ final class GameScene: SKScene {
         hud.updateEnergy(player.energyPct)
         if !demoMode {
             dashBtn.setEnabled(player.energy >= 25)
-            shieldBtn.setEnabled(player.energy >= 35 && !player.isShielded)
+            shieldBtn.setEnabled(player.canShield)
         }
     }
 
@@ -2408,12 +2412,21 @@ final class GameScene: SKScene {
                 coil.removeAllActions(); coil.fillColor = SKColor(white: 0.35, alpha: 1); coil.glowWidth = 0; coil.setScale(0.9)
             }
             var effect = ""
-            // Generators kill nearby lasers; pumps drain the nearest flooded tunnel.
-            let dead = lasers.filter { $0.position.distance(to: p) < 480 }
+            // Each laser belongs to its nearest generator, so shutting them all down
+            // always clears every beam. Pumps drain the nearest flooded tunnel.
+            let sitePositions = sites.map { $0.node.position }
+            let owns: (SKNode) -> Bool = { beam in
+                sitePositions.min(by: { $0.distance(to: beam.position) < $1.distance(to: beam.position) }) == p
+            }
+            let dead = lasers.filter(owns)
             for beam in dead {
                 beam.removeAllActions(); beam.run(.sequence([.fadeOut(withDuration: 0.3), .removeFromParent()])); effect = " Lasers down!"
+                // Show the cause→effect link: a spark travels from the generator to the beam.
+                let zap = SKShapeNode(circleOfRadius: 6); zap.fillColor = Palette.energy; zap.strokeColor = .clear; zap.glowWidth = 6
+                zap.position = p; zap.zPosition = ZLayer.fx; worldNode.addChild(zap)
+                zap.run(.sequence([.move(to: beam.position, duration: 0.45), .fadeOut(withDuration: 0.15), .removeFromParent()]))
             }
-            lasers.removeAll { $0.position.distance(to: p) < 480 }   // stop colliding immediately
+            lasers.removeAll(where: owns)   // stop colliding immediately
             if let idx = waterRects.indices.min(by: { hypot(waterRects[$0].midX - p.x, waterRects[$0].midY - p.y) < hypot(waterRects[$1].midX - p.x, waterRects[$1].midY - p.y) }),
                hypot(waterRects[idx].midX - p.x, waterRects[idx].midY - p.y) < 650 {
                 let r = waterRects.remove(at: idx)
@@ -2441,13 +2454,14 @@ final class GameScene: SKScene {
     /// ★1 finish · ★2 never hit/spotted · ★3 all coins (chases: finish in par time).
     private struct StarResult { let earned: [Bool]; let labels: [String] }
     private func starResult() -> StarResult {
-        let clean = timesHit == 0
+        // Stealth: ★2 = never spotted (lasers/traps don't count), ★3 = all coins, or no damage at all.
+        let clean = level.isDriving ? timesHit == 0 : timesSpotted == 0
         let third: Bool; let thirdLabel: String
         if level.isDriving {
             let par: TimeInterval = level.isBoat ? 45 : 40
             third = levelTime <= par; thirdLabel = "Under \(Int(par))s (\(Int(levelTime))s)"
         } else if level.coinSpots.isEmpty {
-            third = lives == maxLives; thirdLabel = "Full health"
+            third = timesHit == 0; thirdLabel = "No damage"
         } else {
             third = levelCoins >= level.coinSpots.count
             thirdLabel = "All coins (\(levelCoins)/\(level.coinSpots.count))"
@@ -2456,9 +2470,16 @@ final class GameScene: SKScene {
                           labels: ["Mission complete", level.isDriving ? "No crashes" : "Never spotted", thirdLabel])
     }
     static func bestStars(_ lvl: LevelData) -> Int { UserDefaults.standard.integer(forKey: "kaiditya.stars.\(lvl.name)") }
-    private func recordStars(_ n: Int) {
+    /// Saves the best star count and pays 2 coins per newly earned star (first clear = 1 star included).
+    @discardableResult
+    private func recordStars(_ n: Int) -> Int {
         let key = "kaiditya.stars.\(level.name)"
-        UserDefaults.standard.set(max(n, UserDefaults.standard.integer(forKey: key)), forKey: key)
+        let best = UserDefaults.standard.integer(forKey: key)
+        guard n > best else { return 0 }
+        UserDefaults.standard.set(n, forKey: key)
+        let reward = (n - best) * 2
+        Economy.addCoins(reward); hud.updateCoins(Economy.coins)
+        return reward
     }
 
     static func starRow(_ n: Int, size: CGFloat) -> SKNode {
@@ -2473,9 +2494,12 @@ final class GameScene: SKScene {
         return row
     }
 
-    private func handleCaught() {
+    enum DamageCause { case spotted, laser, trap, boss }
+
+    private func handleCaught(_ cause: DamageCause = .spotted) {
         guard caughtCooldown <= 0 else { return }
         caughtCooldown = 2.0
+        if cause == .spotted { timesSpotted += 1 }
         let flash = SKSpriteNode(color: SKColor(red:1,green:0,blue:0,alpha:0.4), size: CGSize(width: 6000, height: 6000))
         flash.zPosition = ZLayer.overlay - 1; cam.addChild(flash)
         flash.run(.sequence([.fadeOut(withDuration: 0.4), .removeFromParent()]))
@@ -2484,13 +2508,26 @@ final class GameScene: SKScene {
         lives = max(0, lives - 1)
         hud.setLives(lives, max: maxLives)
 
-        // Out of lives → restart the whole level.
+        // Out of hearts → fail forward: refill hearts and resume from the last checkpoint,
+        // keeping collected objectives (clean-run stars are already lost via timesHit).
+        // In the boss fight, progress rewinds only to the start of the current phase.
         if lives <= 0 {
-            hud.showToast("Out of lives! Restarting level…", color: Palette.heroRed)
+            lives = maxLives; hud.setLives(lives, max: maxLives)
+            caughtCooldown = 3.0   // visible grace period after respawning
+            player.visual.run(.repeat(.sequence([.fadeAlpha(to: 0.3, duration: 0.15), .fadeAlpha(to: 1, duration: 0.15)]), count: 10))
+            if objective == .boss {
+                let perPhase = 3, total = 3 * level.bossPhases
+                bossHits = min(bossHits, (bossPhase - 1) * perPhase)
+                hud.updateBossHealth(remaining: total - bossHits, total: total)
+                for p in bossProjectiles { p.removeFromParent() }
+                bossProjectiles.removeAll()
+                player.position = CGPoint(x: level.exitPos.x, y: level.exitPos.y - 220)
+                hud.showToast("Out of hearts! Try this phase again 💪", color: Palette.energy)
+            } else {
+                player.position = checkpoint
+                hud.showToast("Out of hearts! Back to checkpoint — you've got this 💪", color: Palette.energy)
+            }
             for m in minions { m.setSeeing(false, dt: 1) }
-            run(.sequence([.wait(forDuration: 1.1),
-                           .run { [weak self] in guard let self else { return }; self.loadLevel(self.levelIndex) }]),
-                withKey: "levelRestart")
             return
         }
 
@@ -2504,7 +2541,8 @@ final class GameScene: SKScene {
                 player.position.y = max(40, min(worldSize.height - 40, player.position.y + away.dy/len * 120))
             }
         } else {
-            hud.showToast("Spotted! 💔 \(lives) left — back to checkpoint", color: Palette.heroRed)
+            let what = cause == .laser ? "Laser hit!" : cause == .trap ? "Zapped by a trap!" : "Spotted!"
+            hud.showToast("\(what) 💔 \(lives) left — back to checkpoint", color: Palette.heroRed)
             player.position = checkpoint
         }
         for m in minions { m.setSeeing(false, dt: 1) }
@@ -2568,6 +2606,16 @@ final class GameScene: SKScene {
 
     private func completeLevel() {
         objective = .done
+        // Persist the unlock now (not on next load) and pay a first-clear reward.
+        if levelIndex + 1 < Levels.all.count, levelIndex + 1 > maxUnlocked {
+            maxUnlocked = levelIndex + 1
+            UserDefaults.standard.set(maxUnlocked, forKey: "kaiditya.maxUnlocked")
+        }
+        let clearedKey = "kaiditya.cleared.\(level.name)"
+        if !UserDefaults.standard.bool(forKey: clearedKey) {
+            UserDefaults.standard.set(true, forKey: clearedKey)
+            Economy.addCoins(6); hud.updateCoins(Economy.coins)
+        }
         if levelIndex + 1 < Levels.all.count {
             let burst = SKShapeNode(circleOfRadius: 30); burst.strokeColor = biome.accent; burst.lineWidth = 4; burst.fillColor = .clear
             burst.position = player.position; burst.zPosition = ZLayer.fx; worldNode.addChild(burst)
@@ -2706,7 +2754,10 @@ final class GameScene: SKScene {
                 "Could you find them for me? I'll give you a reward!"
             ]) { [weak self] in
                 guard let self else { return }
-                self.questActive = true; self.questProgress = 0; self.updateQuestHUD()
+                // Coins already picked up this visit count too, so the errand can't become impossible.
+                self.questActive = true
+                self.questProgress = self.coinNodes.filter { $0.parent == nil }.count
+                self.updateQuestHUD()
                 self.hud.showToast("Quest started: find \(self.questTarget) coins!", color: Palette.energy)
             }
         } else if questProgress >= questTarget {
@@ -2717,6 +2768,7 @@ final class GameScene: SKScene {
                 guard let self else { return }
                 Economy.addCoins(15); self.hud.updateCoins(Economy.coins)
                 self.questActive = false; self.questDone = true; self.updateQuestHUD()
+                UserDefaults.standard.set(true, forKey: "kaiditya.hub.questDone")
                 SoundFX.shared.play("powerup")
                 self.hud.showToast("+15 coins! Quest complete 🎉", color: Palette.crystal)
             }
@@ -2735,13 +2787,12 @@ final class GameScene: SKScene {
     private func openArcade() { startMinigame() }
 
     private func openChest() {
-        let (reward, streak) = Economy.claimDaily()
+        let (reward, _) = Economy.claimDaily()
         if reward > 0 {
             hud.updateCoins(Economy.coins)
             SoundFX.shared.play("powerup"); shake(5, 0.2)
             blip(chestPos, "+\(reward) ★", Palette.energy)
-            let streakMsg = streak > 1 ? " · \(streak)-day streak! 🔥" : ""
-            hud.showToast("Daily bonus: +\(reward) coins!\(streakMsg)", color: Palette.crystal)
+            hud.showToast("Daily gift: +\(reward) coins!", color: Palette.crystal)
             // swap to closed/dim chest
             chestNode?.removeFromParent()
             let closed = CharacterFactory.makeChest(glowing: false)
@@ -2888,6 +2939,7 @@ final class GameScene: SKScene {
                         guard let self else { return }
                         Economy.addCoins(10); self.hud.updateCoins(Economy.coins)
                         self.deliverActive = false; self.deliverDone = true
+                        UserDefaults.standard.set(true, forKey: "kaiditya.hub.deliverDone")
                         self.carriedItem?.removeFromParent(); self.carriedItem = nil
                         SoundFX.shared.play("powerup")
                         self.hud.showToast("Pie delivered! +10 coins 🥧", color: Palette.crystal)
@@ -2959,7 +3011,7 @@ final class GameScene: SKScene {
             "I'll zap you with my static powers!"
         ]) { [weak self] in
             self?.objective = .boss
-            self?.hud.showToast("Chase him & tap HIT to attack! SHIELD blocks zaps.", color: Palette.energy)
+            self?.hud.showToast("Get close as HERO & tap HIT! SHIELD blocks zaps.", color: Palette.energy)
             self?.beginBossFight()
         }
     }
@@ -2978,6 +3030,11 @@ final class GameScene: SKScene {
     private func bossStrike() {
         guard objective == .boss, bossFightActive, let v = villain else { return }
         guard action(forKey: "hitCooldown") == nil else { return }   // brief swing cooldown
+        guard player.inCostume else {
+            hud.showToast("Switch to HERO to fight!", color: Palette.energy)
+            run(.wait(forDuration: 0.5), withKey: "hitCooldown")
+            return
+        }
         let dx = v.position.x - player.position.x, dy = v.position.y - player.position.y
         let dist = max(hypot(dx, dy), 1)
         if dist > 120 {
@@ -2997,8 +3054,20 @@ final class GameScene: SKScene {
     private func bossAttack() {
         guard objective == .boss, let v = villain else { return }
         bossAttackCounter += 1
-        // Telegraph flash before attacking.
-        v.run(.sequence([.scale(to: 1.18, duration: 0.15), .scale(to: 1.0, duration: 0.15)]))
+        // Real telegraph: a red wind-up (0.6s) the player can react to, then the attack.
+        let warn = RichLabel(text: "!"); warn.fontName = "AvenirNext-Heavy"; warn.fontSize = 34
+        warn.fontColor = Palette.heroRed; warn.position = CGPoint(x: 0, y: 78); warn.zPosition = ZLayer.fx
+        v.addChild(warn)
+        warn.run(.sequence([.repeat(.sequence([.fadeAlpha(to: 0.3, duration: 0.1), .fadeAlpha(to: 1, duration: 0.1)]), count: 3), .removeFromParent()]))
+        v.run(.sequence([.scale(to: 1.15, duration: 0.3), .scale(to: 1.0, duration: 0.3)]))
+        Haptics.tap()
+        run(.sequence([.wait(forDuration: 0.6), .run { [weak self, weak v] in
+            guard let self, let v, self.objective == .boss, self.bossFightActive else { return }
+            self.launchBossAttack(v)
+        }]))
+    }
+
+    private func launchBossAttack(_ v: SKNode) {
         switch bossPhase {
         case 1:
             if bossAttackCounter % 2 == 0 { boltVolley(from: v, count: 3, spread: 0.25) }
@@ -3068,7 +3137,7 @@ final class GameScene: SKScene {
                     if target.distance(to: self.player.position) < 150 { self.shake(6, 0.18) }
                     if self.objective == .boss, self.starTimer <= 0, !self.player.isShielded,
                        target.distance(to: self.player.position) < 60 {
-                        self.handleCaught()
+                        self.handleCaught(.boss)
                     }
                 },
                 .removeFromParent()
@@ -3158,13 +3227,13 @@ final class GameScene: SKScene {
             if proj.name == "ringBlast" {
                 let radius = 30 * proj.xScale
                 let d = proj.position.distance(to: player.position)
-                if abs(d - radius) < 24 { hud.showToast("Zapped! 💥", color: Palette.heroRed); handleCaught() }
+                if abs(d - radius) < 24 { handleCaught(.boss) }
             } else if proj.position.distance(to: player.position) < 26 {
-                proj.removeFromParent(); handleCaught()
+                proj.removeFromParent(); handleCaught(.boss)
             }
         }
         if bossCharging, let v = villain, v.position.distance(to: player.position) < 50 {
-            handleCaught()
+            handleCaught(.boss)
         }
     }
 
@@ -3173,7 +3242,7 @@ final class GameScene: SKScene {
         let hitsPerPhase = 3
         let totalNeeded = hitsPerPhase * level.bossPhases
         bossHits += 1
-        run(.wait(forDuration: 0.45), withKey: "hitCooldown")
+        run(.wait(forDuration: 0.7), withKey: "hitCooldown")
         v.run(.sequence([.scale(to: 0.8, duration: 0.1), .scale(to: 1.0, duration: 0.1)]))
         let pow = RichLabel(text: "POW!"); pow.fontName = "AvenirNext-Heavy"; pow.fontSize = 30; pow.fontColor = Palette.heroRed
         pow.position = CGPoint(x: v.position.x, y: v.position.y + 50); pow.zPosition = ZLayer.fx; worldNode.addChild(pow)
@@ -3294,7 +3363,9 @@ final class GameScene: SKScene {
         case .boss:
             if let v = villain {
                 demoSteer(to: v.position)
-                if v.position.distance(to: player.position) < 90, tap(0.5) { fightVillain() }
+                if v.position.distance(to: player.position) < 90, tap(0.5) {
+                    if bossFightActive { bossStrike() } else { fightVillain() }
+                }
                 if !player.isDashing && player.energy >= 25 { player.tryDash() }
             }
         case .done: break
