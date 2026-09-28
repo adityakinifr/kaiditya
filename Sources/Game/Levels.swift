@@ -22,6 +22,7 @@ struct Biome {
     let coverShape: CoverShape
     let ambientFX: AmbientFX
     let vignette: CGFloat        // 0..1 edge darkening strength
+    var tileKey: String? = nil   // Blender floor tiles in tiles_<key>.atlas (nil = flat colour fallback)
 }
 
 struct BuildingSpec {
@@ -97,7 +98,8 @@ enum Biomes {
         accent: Palette.crystal,
         coverShape: .bush,
         ambientFX: .none,
-        vignette: 0.16)
+        vignette: 0.16,
+        tileKey: "park")
 
     static let docks = Biome(
         groundA: SKColor(red: 0.34, green: 0.40, blue: 0.50, alpha: 1),
@@ -114,7 +116,8 @@ enum Biomes {
         accent: SKColor(red: 1.0, green: 0.62, blue: 0.25, alpha: 1),
         coverShape: .crate,
         ambientFX: .fireflies,
-        vignette: 0.34)
+        vignette: 0.34,
+        tileKey: "docks")
 
     static let highway = Biome(
         groundA: SKColor(red: 0.28, green: 0.30, blue: 0.34, alpha: 1),
@@ -148,7 +151,8 @@ enum Biomes {
         accent: SKColor(red: 0.30, green: 0.85, blue: 0.95, alpha: 1),
         coverShape: .crate,
         ambientFX: .fireflies,
-        vignette: 0.4)
+        vignette: 0.4,
+        tileKey: "rooftops")
 
     static let lab = Biome(
         groundA: SKColor(red: 0.86, green: 0.90, blue: 0.92, alpha: 1),
@@ -165,7 +169,8 @@ enum Biomes {
         accent: SKColor(red: 0.10, green: 0.70, blue: 0.78, alpha: 1),
         coverShape: .pillar,
         ambientFX: .none,
-        vignette: 0.18)
+        vignette: 0.18,
+        tileKey: "lab")
 
     static let sewers = Biome(
         groundA: SKColor(red: 0.22, green: 0.28, blue: 0.24, alpha: 1),
@@ -182,7 +187,8 @@ enum Biomes {
         accent: SKColor(red: 0.55, green: 0.90, blue: 0.45, alpha: 1),
         coverShape: .crate,
         ambientFX: .none,
-        vignette: 0.46)
+        vignette: 0.46,
+        tileKey: "sewers")
 
     static let harbor = Biome(
         groundA: SKColor(red: 0.30, green: 0.50, blue: 0.66, alpha: 1),
@@ -212,11 +218,12 @@ enum Biomes {
         buildingWall: SKColor(red: 0.30, green: 0.16, blue: 0.26, alpha: 1),
         signColor: SKColor(red: 1.0, green: 0.35, blue: 0.55, alpha: 1),
         ambientColor: SKColor(red: 0.12, green: 0.02, blue: 0.10, alpha: 1),
-        ambientAlpha: 0.5,
+        ambientAlpha: 0.22,
         accent: SKColor(red: 1.0, green: 0.40, blue: 0.70, alpha: 1),
         coverShape: .pillar,
         ambientFX: .sparks,
-        vignette: 0.52)
+        vignette: 0.28,
+        tileKey: "fortress")
 
     static let tower = Biome(
         groundA: SKColor(red: 0.21, green: 0.18, blue: 0.32, alpha: 1),
@@ -233,7 +240,8 @@ enum Biomes {
         accent: SKColor(red: 0.30, green: 0.95, blue: 1.0, alpha: 1),
         coverShape: .pillar,
         ambientFX: .sparks,
-        vignette: 0.5)
+        vignette: 0.5,
+        tileKey: "tower")
 }
 
 enum Levels {
@@ -632,7 +640,7 @@ enum Levels {
         dronesStyle: true,
         grappleAnchors: [CGPoint(x: 1200, y: 1100), CGPoint(x: 1900, y: 1100),
                          CGPoint(x: 2500, y: 1100), CGPoint(x: 2900, y: 1100)],
-        hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1700)])
+        hazardSpots: [CGPoint(x: 1300, y: 1000), CGPoint(x: 2100, y: 900), CGPoint(x: 2600, y: 1560)])
 
     static let powerplant = LevelData(
         index: 10,

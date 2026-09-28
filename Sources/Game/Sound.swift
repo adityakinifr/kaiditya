@@ -58,13 +58,19 @@ final class SoundFX {
     func playMusic(_ name: String, volume: Float = 0.5) {
         guard musicEnabled else { return }
         if currentMusic == name, music[name]?.isPlaying == true { return }
-        if let cur = music[currentMusic] { cur.setVolume(0, fadeDuration: 0.4); cur.stop() }
+        if let cur = music[currentMusic] {
+            cur.setVolume(0, fadeDuration: 0.4)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+                if self?.music[self?.currentMusic ?? ""] !== cur { cur.stop() }
+            }
+        }
         guard let p = music[name] else { return }
         currentMusic = name
         p.numberOfLoops = -1
-        p.volume = volume
+        p.volume = 0
         p.currentTime = 0
         p.play()
+        p.setVolume(volume, fadeDuration: 0.4)
     }
 
     func stopMusic() {
@@ -193,6 +199,8 @@ final class SoundFX {
             let f = notes[min(2, Int(t / 0.17))]
             return self.env(t, 0.5) * 0.34 * self.tone(t, f)
         }
+        // Suspicion "huh?" chirp (rising two-step)
+        generate("suspect", 0.22) { t in self.env(t, 0.22, atk: 0.01) * 0.3 * (self.tone(t, t < 0.1 ? 520 : 740) + 0.3 * self.tone(t, t < 0.1 ? 1040 : 1480)) }
         // UI tap
         generate("tap", 0.08) { t in self.env(t, 0.08) * 0.25 * self.tone(t, 1200) }
     }

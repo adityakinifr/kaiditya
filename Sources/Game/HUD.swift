@@ -61,7 +61,7 @@ final class HUD: SKNode {
         missionContainer.addChild(missionBG)
 
         levelLabel.fontName = "AvenirNext-Heavy"
-        levelLabel.fontSize = 10
+        levelLabel.fontSize = 11
         levelLabel.fontColor = Palette.hudAccent
         levelLabel.horizontalAlignmentMode = .left
         levelLabel.verticalAlignmentMode = .center
@@ -69,7 +69,7 @@ final class HUD: SKNode {
         missionContainer.addChild(levelLabel)
 
         missionTitle.fontName = "AvenirNext-Bold"
-        missionTitle.fontSize = 13.5
+        missionTitle.fontSize = 15
         missionTitle.fontColor = .white
         missionTitle.horizontalAlignmentMode = .left
         missionTitle.verticalAlignmentMode = .center
@@ -78,7 +78,7 @@ final class HUD: SKNode {
         missionContainer.addChild(missionTitle)
 
         missionHint.fontName = "AvenirNext-Regular"
-        missionHint.fontSize = 11
+        missionHint.fontSize = 12.5
         missionHint.fontColor = Palette.hudAccent
         missionHint.horizontalAlignmentMode = .left
         missionHint.verticalAlignmentMode = .center

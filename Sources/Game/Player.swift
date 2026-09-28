@@ -9,7 +9,7 @@ final class Player: SKNode {
     private let sprite = CharacterSprite(.hero)
     private var usingSprite: Bool { !sprite.isHidden }
     private let shieldBubble: SKShapeNode
-    private let heroShadow: SKShapeNode
+    private let heroShadow: SKSpriteNode
     private(set) var carNode: SKNode?
     private(set) var isDriving = false
 
@@ -42,7 +42,7 @@ final class Player: SKNode {
         heroShadow.position = CGPoint(x: 0, y: -16)
         addChild(heroShadow)
 
-        visual.zPosition = ZLayer.characters
+        visual.zPosition = 0.5
         visual.addChild(vectorBody)
         sprite.position = CGPoint(x: 0, y: -16)   // feet on the ground shadow
         visual.addChild(sprite)
@@ -108,7 +108,16 @@ final class Player: SKNode {
         trail.zPosition = ZLayer.fx - 1
         addChild(trail)
         trail.run(.sequence([.fadeOut(withDuration: 0.3), .removeFromParent()]))
+        visual.run(.sequence([.scaleX(to: 1.18, y: 0.84, duration: 0.05), .scale(to: 1, duration: 0.14)]))
+        if let p = parent { Effects.burst(at: CGPoint(x: position.x, y: position.y - 14), color: SKColor(white: 0.85, alpha: 1), count: 8, speed: 70, in: p) }
         return true
+    }
+
+    /// Brief white flash + squash when hit.
+    func hitFlash() {
+        sprite.run(.sequence([.colorize(with: .white, colorBlendFactor: 0.9, duration: 0),
+                              .wait(forDuration: 0.08), .colorize(withColorBlendFactor: 0, duration: 0.12)]))
+        visual.run(.sequence([.scaleX(to: 1.2, y: 0.8, duration: 0.05), .scale(to: 1, duration: 0.16)]))
     }
 
     @discardableResult

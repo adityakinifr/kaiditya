@@ -15,7 +15,7 @@ final class NPC: SKNode {
 
         let body = SpriteSet.npcs[id].map { CharacterFactory.makeSpriteCharacter($0, shadowWidth: 30, footY: -16) }
             ?? CharacterFactory.makeNPC(tint: tint)
-        body.zPosition = ZLayer.characters
+        body.zPosition = 0.5
         addChild(body)
 
         nameTag.text = name
@@ -26,7 +26,7 @@ final class NPC: SKNode {
         let plate = roundedRect(size: CGSize(width: nameTag.frame.width + 14, height: 18),
                                 corner: 6, color: SKColor(white: 0, alpha: 0.5))
         plate.position = CGPoint(x: 0, y: 44)
-        plate.zPosition = ZLayer.fx
+        plate.zPosition = 8
         plate.addChild(nameTag)
         addChild(plate)
 
@@ -34,7 +34,7 @@ final class NPC: SKNode {
         bang.fontSize = 28
         bang.fontColor = Palette.energy
         bang.position = CGPoint(x: 0, y: 64)
-        bang.zPosition = ZLayer.fx
+        bang.zPosition = 8
         bang.alpha = 0
         addChild(bang)
 
