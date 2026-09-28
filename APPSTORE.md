@@ -22,6 +22,8 @@ Status of this branch (`appstore-ready`): code/config is submission-ready. Remai
 5. `scripts/archive.sh --upload` (use `BUILD=N` to bump the build number on later uploads).
 6. TestFlight: install on your phone, play through once.
 7. Metadata (below), screenshots, age rating, App Privacy = **Data Not Collected**, price Free, DSA = non-trader, turn off "Available on Mac" unless tested.
+   - Done in ASC: metadata, 6.5" screenshots, category, 9+ rating, content rights, Free, Mac/Vision Pro off, privacy URL.
+   - Availability: 173 regions — China mainland (needs game licence) and South Korea (needs GRAC rating number) excluded.
 8. Submit for review.
 
 ## Metadata draft
